@@ -1,0 +1,287 @@
+#!/usr/bin/env python
+
+import os, sys
+import numpy as np
+
+sys.path.append(os.path.join(os.path.dirname(__file__), 'common'))
+import utils
+
+class RTRefOD:
+  def __init__(self, inFile, startWN, endWN, subset, profile):
+    """
+    Radiative Transfer Reference Optical Depths
+
+    - Build LBLRTM TAPE5s for each set of molecules of interest
+      (full set of molecules and subsets) for a set of 4 profiles
+      specified in an input netCDF and over all bands (25000-38000
+      cm-1 broken up into 2000 cm-1 chunks for LBLRTM)
+    - Build TAPE3 (binary line file) for bands
+    - Run LBLRTM to generate ODInt files
+    - Use the ODInt files determine path-integrated optical depth and
+      store in netCDF file
+
+    Generate optical depth tables (OD as a function of
+    wavenumber, pressure, temperature, and band) for specified
+    molecule set
+
+    Input
+      inFile -- string, netCDF file with profile specifications
+      startWN -- float, starting wavenumber for band
+      endWN -- float, ending wavenumber for band
+      subset -- int
+          0: full set of molecules given in JPL profiles
+          1: Ozone only
+          2: NO2 only
+          3: SO2 only
+          4: BrO only
+          5: HCHO only
+      profile -- dictionary from profile_extraction.singleProfile()
+    """
+
+    self.ncFile = inFile
+    self.wn1 = startWN
+    self.wn2 = endWN
+    self.subset = subset
+    self.profile = profile
+    self.nLev = profile['VMR'].shape[1]
+
+    # HITRAN stuff; 'molecules.txt' is in version control
+    htList = 'molecules.txt'
+    utils.file_check(htList)
+    inDat = open(htList).read().splitlines()
+    self.molNamesHT = [mol.split("_")[1] for mol in inDat]
+    self.nMolMax = len(self.molNamesHT)
+
+    # HDO is not active in the 25000-38000 cm-1 range
+    # we are working on adding HCHO as a XS in the database
+    # cannot find CHOHO (is it CHOCHO?)
+    self.ignored = ['HDO', 'HCHO', 'CHOHO']
+
+    if subset == 0:
+      self.subStr = 'all_molecules'
+    elif subset == 1:
+      self.subStr = 'O3'
+    elif subset == 2:
+      self.subStr = 'NO2'
+    elif subset == 3:
+      self.subStr = 'SO2'
+    elif subset == 4:
+      self.subStr = 'BrO'
+    elif subset == 5:
+      self.subStr = 'HCHO'
+    else:
+      print('Invalid molecule subset')
+      sys.exit(1)
+  # end constructor
+
+  def molIdx(self):
+    """
+    Map the indices of the molecules given in the input profiles to
+    the HITRAN molecule number/index.
+    """
+
+    profMol = list(self.profile['molecules'])
+
+    # each mapping is a dictionary key-value pair (given:HITRAN)
+    self.iMol = {}
+    for iMol, mol in enumerate(self.molNamesHT):
+      if mol in profMol: self.iMol[iMol] = profMol.index(mol)
+
+  # end molIdx()
+
+  def xsIdx(self):
+    """
+    Cross section species do not have assigned numbers, so no mapping
+    to HITRAN is necessary like the molecules. But this function
+    automates the detection of cross section names and stores their
+    indices from the profile['molecules'] array.
+    """
+
+    self.iXS = {}
+    for iMol, mol in enumerate(self.profile['molecules']):
+      if mol not in self.molNamesHT and mol not in self.ignored:
+        self.iXS[mol.upper()] = iMol
+    # end mol loop
+    self.nXS = len(self.iXS.keys())
+  # end xsIdx()
+
+  def calcAlt(self):
+    """
+    Height/altitude (km) calculation with Hydrostatic Equation
+    z = -(RT/g) * ln(p/p0)
+    """
+
+    # constants for Hydrostatic Equation
+    R = 287.0 # dry air, J kg-1 K-1; Rydberg Constant
+    g = 9.81 # m s-2; acceleration due to gravity
+
+    pLev = self.profile['level_P']
+    tLev = self.profile['level_T']
+    pArg = pLev / self.profile['surface_P']
+    thickness = -(R*tLev/g) * np.log(pArg)
+
+    # because i was getting -0 that messes up LBLRTM
+    self.profile['level_Z'] = np.abs(np.cumsum(thickness))/1000.0
+  # end calcAlt()
+
+  def lblT5(self):
+    """
+    Generate an LBLRTM TAPE5 for a given band and subset of molecules
+
+    See lblrtm_instructions.html that come with source code
+    """
+
+    def recordBlock(param, format='{:10.3E}'):
+      """
+      Records 3.3b, 3.6, and 3.8.2 are flexible in size, depending on
+      the number of pressures or molecules being specified. The
+      "record blocks" are pretty similarly constructed, so this
+      function automates the process, given a parameter over which to
+      loop
+
+      Input
+        param -- float array of pressures or densities for a profile
+
+      Keywords
+        format -- format string for a single value
+          https://docs.python.org/3.4/library/string.html#formatexamples
+
+      Output
+        outRec -- string, format block record
+      """
+
+      outRec = ''
+      for iVal, val in enumerate(param):
+        outRec += format.format(val)
+
+        # eight molecules per line
+        if ((iVal+1) % 8) == 0: outRec += '\n'
+      # end record36 loop
+
+      # end of record, if nMol is not divisible by 8
+      if outRec[-1] != '\n': outRec += '\n'
+
+      return outRec
+    # end recordBlock()
+
+    # organize the TAPE5s by profile timestamp in the working dir
+    self.outDirT5 = os.path.join('LBL_TAPE5_dir', self.profile['time'])
+    if not os.path.exists(self.outDirT5): os.makedirs(self.outDirT5)
+
+    # problematic for fractional wavenumbers
+    outT5 = 'TAPE5_{0:05d}-{1:05d}_{2:s}'.format(
+      self.wn1, self.wn2, self.subStr)
+    self.outT5 = os.path.join(self.outDirT5, outT5)
+    print('Building {}'.format(self.outT5))
+
+    pLevs = self.profile['level_P']
+    zenith = 90-self.profile['obs_zenith']
+
+    # record 1.1: simple description of calculation
+    record11 = '$ OD computation for {}'.format(self.outT5)
+
+    # record1.2: HI, F4: spectral line application
+    # CN=1: all continua calculated, including Rayleigh extinction
+    #   where applicable
+    # OD=1, MG=1: optical depth computation, layer-by-layer
+    # include lines and cross sections; use LBLATM
+    record12 = ' HI=1 F4=1 CN=1 AE=0 EM=0 SC=0 FI=0 PL=0 ' + \
+      'TS=0 AM=1 MG=1 LA=0 OD=1 XS=1'
+    record12 += '{:20s}'.format('1')
+
+    # record 1.3 is kinda long...first, band limits
+    record13 = '{0:10.3e}{1:10.3e}'.format(self.wn1, self.wn2)
+
+    # concatenate (NOT append) 6 zeros in scientific notation
+    # using defaults for SAMPLE, DVSET, ALFAL0, AVMASS,
+    # DPTMIN, and DPTFAC params
+    record13 += ''.join(['{:10.3e}'.format(0) for i in range(6)])
+
+    # line rejection not recorded and output OD spectral resolution
+    record13 += '{0:4s}{1:1d}{2:5s}{3:10.3e}'.format('', 0, '', 0.01)
+
+    # records required with IATM=1 (we're using LBLATM to calculate
+    # layer amounts for species -- we only have level amounts)
+    # US Standard atmosphere, path type 2 (slant from H1 to H2), 2
+    # pressure levels, no zero-filling, full printout, 7 molecules,
+    # do not write to TAPE7
+    record31 = '{0:5d}{1:5d}{2:5d}{3:5d}{4:5d}{5:5d}{6:5d}'.format(
+      0, 2, -self.nLev, 0, 0, self.nMolMax, 0)
+
+    # record 3.2: observer pressure limits, nadir SZA
+    record32 = '{0:10.3f}{1:10.3f}{2:10.3f}'.format(
+      pLevs.max(), pLevs.min(), zenith)
+
+    # record 3.3b -- list of pressures boundaries for calculations
+    record33b = recordBlock(pLevs,format='{:10.3f}')[:-1]
+
+    # record 3.4: user profile header for given molecule
+    record34 = '{0:5d}{1:24s}'.format(-self.nLev, ' User profile')
+
+    # record 3.7: number of XS species, user-provided profile
+    record37 = '{0:5d}{1:5d}'.format(self.nXS, 0)
+
+    # record 3.7.1: XS molecule name
+    record371 = ['{:10s}'.format(xs) for xs in self.iXS.keys()]
+    record371 = ''.join(record371)
+
+    # record 3.8: n pressure levels, pressure used for "height"
+    record38 = '{0:5d}{1:5d} XS User Profile'.format(self.nLev, 1)
+
+    # generate entire user profile (molecules and cross sections)
+    # for given T and write to TAPE5
+    records35_36, records381_382 = [], []
+    for iLev in range(self.nLev):
+      pLev = pLevs[iLev]
+      xsAll = [self.profile['VMR'][self.iXS[xs], iLev]
+        for xs in self.iXS.keys()]
+
+      record35 = '{0:10.3E}{1:10.3E}{2:10.3E}{3:5s}AA\n'.format(
+        self.profile['level_Z'][iLev], pLev,
+        self.profile['level_T'][iLev], '')
+      records35_36.append(record35)
+
+      # record 3.6: provide VMR at a given level
+      lblAll = np.repeat(0.0, self.nMolMax)
+      for iHT in range(self.nMolMax):
+        if iHT not in self.iMol.keys(): continue
+        lblAll[iHT] = self.profile['VMR'][self.iMol[iHT], iLev] * 1e6
+
+        # sanity check
+        #print('{:4e}'.format(lblAll[iHT]), iHT+1, self.iMol[iHT])
+      # end molecule loop
+
+      # start building the string for record 3.6
+      record36 = recordBlock(lblAll)
+      records35_36.append(record36)
+
+      # record 3.8.1: boundary pressure
+      # plus VMR units for all specified XS species
+      record381 = '{:<10.3f}'.format(pLev)
+      record381 += ''.join(['A']*self.nXS) + '\n'
+      records381_382.append(record381)
+
+      # record 3.8.2: layer molecule VMR, which should have been
+      # defined in when constructing records 3.5 and 3.6
+      # can combine these two since we're only doing 1 XS
+      # molecule per layer
+      record382 = recordBlock(xsAll)
+      records381_382.append(record382)
+    # end level loop
+
+    # combine the record lists into single strings
+    records35_36 = ''.join(records35_36)[:-1]
+    records381_382 = ''.join(records381_382)[:-1]
+
+    records = [record11, record12, record13, \
+      record31, record32, record33b, \
+      record34, records35_36, record37, record371, \
+      record38, records381_382]
+
+    # finally write the TAPE5
+    outFP = open(self.outT5, 'w')
+    for rec in records: outFP.write('{}\n'.format(rec))
+    outFP.write('%%%%')
+    outFP.close()
+  # end lblT5()
+# end LBLOD

@@ -1,2 +1,7 @@
 *.nc
 LNFL_out
+LBL_In/
+LBL_Out/
+LBL_TAPE5_dir/
+README
+__pycache__/
