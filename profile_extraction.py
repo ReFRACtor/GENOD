@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os, sys
+import numpy as np
 
 sys.path.append('common')
 import utils
@@ -11,7 +12,8 @@ def readProfiles(inFile):
   """
 
   import netCDF4 as nc
-  import numpy as np
+
+  print('Reading {}'.format(inFile))
 
   atmDict = {}
 
@@ -40,11 +42,49 @@ def readProfiles(inFile):
     atmDict['id'] = scene.variables['scene_id'][:]
     atmDict['solar_zenith'] = scene.variables['solar_zenith'][:]
     atmDict['surface_height'] = scene.variables['surface_height'][:]
-    atmDict['time'] = scene.variables['time_string'][:]
+    atmDict['time'] = \
+      nc.chartostring(scene.variables['time_string'][:])
   # endwith
 
   return atmDict
 # end readProfiles()
+
+def singleProfile(inDict, iProf, aboveSurface=True):
+  """
+  Using the output from readProfiles() as a starting point, extract
+  a single profile from the collection of profiles provided
+
+  Input
+    inDict -- dictionary from readProfiles()
+    iProf -- zero-offset index of profile to extract
+
+  Keywords
+    aboveSurface -- boolean; only keep levels where pressure exceeds
+      the given surface pressure
+  """
+
+  print('Extracting profile {}'.format(iProf+1))
+
+  singleAtm = {}
+  for field in inDict: singleAtm[field] = inDict[field][iProf]
+
+  if aboveSurface:
+    iPosAlt = np.where(
+      singleAtm['level_P'] <= singleAtm['surface_P'])[0]
+    if iPosAlt.size == 0:
+      print('Found no levels above the surface')
+
+      # need to do something else here
+      return singleAtm
+    # endif 0
+
+    singleAtm['level_P'] = singleAtm['level_P'][iPosAlt]
+    singleAtm['level_T'] = singleAtm['level_T'][iPosAlt]
+    singleAtm['VMR'] = singleAtm['VMR'][:,iPosAlt]
+  # end surface
+
+  return singleAtm
+# end singleProfile
 
 if __name__ == '__main__':
   import argparse
@@ -52,23 +92,17 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(\
     description='Read in JPL-provided netCDF with atmospheric ' + \
     'profiles')
-  parser.add_argument('--profiles_nc', '-i', type=str, \
+  parser.add_argument('--profiles_nc', '-p', type=str, \
     default='uv_benchmark_scenes.nc', \
     help='netCDF file with atmospheric conditions for a number ' + \
       'of profiles.')
+  parser.add_argument('--index', '-i', type=int, \
+    help='Zero-offset index for profile of interest.')
   args = parser.parse_args()
 
   ncFile = args.profiles_nc; utils.file_check(ncFile)
   atm = readProfiles(ncFile)
-  profMol = atm['molecules'][0]
+  iProf = args.index
+  if iProf is not None: atm = singleProfile(atm, iProf)
 
-  inDat = open('molecules.txt').read().splitlines()
-  molNames = [mol.split("_")[1] for mol in inDat]
-
-  lnflRec3 = ['0']*47
-  for iMol, mol in enumerate(molNames):
-    if mol in profMol: lnflRec3[iMol] = '1'
-    #print(mol, mol in profMol)
-
-  print(''.join(lnflRec3))
 # end main()
