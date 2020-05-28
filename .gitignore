@@ -5,3 +5,5 @@ LBL_Out/
 LBL_TAPE5_dir/
 README
 __pycache__/
+*.png
+*.pdf
