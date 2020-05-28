@@ -28,22 +28,19 @@ class RTRefOD:
       inFile -- string, netCDF file with profile specifications
       startWN -- float, starting wavenumber for band
       endWN -- float, ending wavenumber for band
-      subset -- int
-          0: full set of molecules given in JPL profiles
-          1: Ozone only
-          2: NO2 only
-          3: SO2 only
-          4: BrO only
-          5: HCHO only
+      subset -- int, represents the zero-offset molecule number from
+        JPL profiles (profile['molecules']) of the molecule to "keep",
+        with subset=nMol being the full set of molecules
       profile -- dictionary from profile_extraction.singleProfile()
     """
 
     self.ncFile = inFile
     self.wn1 = startWN
     self.wn2 = endWN
-    self.subset = subset
+    self.iSubset = subset
     self.profile = profile
     self.nLev = profile['VMR'].shape[1]
+    self.nProfMol = profile['molecules'].shape[0]
 
     # HITRAN stuff; 'molecules.txt' is in version control
     htList = 'molecules.txt'
@@ -57,36 +54,28 @@ class RTRefOD:
     # cannot find CHOHO (is it CHOCHO?)
     self.ignored = ['HDO', 'HCHO', 'CHOHO']
 
-    if subset == 0:
+    if subset == self.nProfMol:
       self.subStr = 'all_molecules'
-    elif subset == 1:
-      self.subStr = 'O3'
-    elif subset == 2:
-      self.subStr = 'NO2'
-    elif subset == 3:
-      self.subStr = 'SO2'
-    elif subset == 4:
-      self.subStr = 'BrO'
-    elif subset == 5:
-      self.subStr = 'HCHO'
-    else:
+    elif subset > self.nProfMol:
       print('Invalid molecule subset')
       sys.exit(1)
+    else:
+      self.subStr = self.profile['molecules'][subset].upper()
+    # endif subset
   # end constructor
 
   def molIdx(self):
     """
     Map the indices of the molecules given in the input profiles to
-    the HITRAN molecule number/index.
+    their names
     """
 
     profMol = list(self.profile['molecules'])
 
-    # each mapping is a dictionary key-value pair (given:HITRAN)
     self.iMol = {}
     for iMol, mol in enumerate(self.molNamesHT):
-      if mol in profMol: self.iMol[iMol] = profMol.index(mol)
-
+      if mol in profMol: self.iMol[mol.upper()] = profMol.index(mol)
+    # end molecule loop
   # end molIdx()
 
   def xsIdx(self):
@@ -123,6 +112,27 @@ class RTRefOD:
     # because i was getting -0 that messes up LBLRTM
     self.profile['level_Z'] = np.abs(np.cumsum(thickness))/1000.0
   # end calcAlt()
+
+  def profSubset(self):
+    """
+    Adjust profile VMRs to given subset -- i.e., zero out all of the
+    VMRs except for the molecule of interest in a given subset
+    """
+
+    # save current VMR profiles
+    cache = self.profile['VMR']
+
+    # need the array (row) index subset HITRAN molecule or XS species
+    try:
+      iCache = self.iMol[self.subStr]
+    except:
+      iCache = self.iXS[self.subStr]
+    # end exception
+
+    # overwrite the profile VMRs with just the subset
+    self.profile['VMR'] = np.zeros_like(self.profile['VMR'])
+    self.profile['VMR'][iCache] = cache[iCache]
+  # end profSubset
 
   def lblT5(self):
     """
@@ -172,7 +182,6 @@ class RTRefOD:
     outT5 = 'TAPE5_{0:05d}-{1:05d}_{2:s}'.format(
       self.wn1, self.wn2, self.subStr)
     self.outT5 = os.path.join(self.outDirT5, outT5)
-    print('Building {}'.format(self.outT5))
 
     pLevs = self.profile['level_P']
     zenith = 90-self.profile['obs_zenith']
@@ -187,7 +196,7 @@ class RTRefOD:
     # include lines and cross sections; use LBLATM
     record12 = ' HI=1 F4=1 CN=1 AE=0 EM=0 SC=0 FI=0 PL=0 ' + \
       'TS=0 AM=1 MG=1 LA=0 OD=1 XS=1'
-    record12 += '{:20s}'.format('1')
+    record12 += '{:>20s}'.format('1')
 
     # record 1.3 is kinda long...first, band limits
     record13 = '{0:10.3e}{1:10.3e}'.format(self.wn1, self.wn2)
@@ -244,8 +253,10 @@ class RTRefOD:
       # record 3.6: provide VMR at a given level
       lblAll = np.repeat(0.0, self.nMolMax)
       for iHT in range(self.nMolMax):
-        if iHT not in self.iMol.keys(): continue
-        lblAll[iHT] = self.profile['VMR'][self.iMol[iHT], iLev] * 1e6
+        nameHT = self.molNamesHT[iHT]
+        if nameHT not in self.profile['molecules']: continue
+        lblAll[iHT] = \
+          self.profile['VMR'][self.iMol[nameHT], iLev] * 1e6
 
         # sanity check
         #print('{:4e}'.format(lblAll[iHT]), iHT+1, self.iMol[iHT])
@@ -283,5 +294,6 @@ class RTRefOD:
     for rec in records: outFP.write('{}\n'.format(rec))
     outFP.write('%%%%')
     outFP.close()
+    print('Built {}'.format(self.outT5))
   # end lblT5()
 # end LBLOD

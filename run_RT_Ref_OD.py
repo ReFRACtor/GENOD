@@ -45,10 +45,16 @@ while wn <= regEndWN:
 for iProf in range(nProf):
   profile = singleProfile(profiles, iProf)
   for wn1, wn2 in zip(startWN, endWN):
-    odObj = calcOD(ncFile, wn1, wn2, 0, profile)
-    odObj.molIdx()
-    odObj.xsIdx()
-    odObj.calcAlt()
-    odObj.lblT5()
+    for set in [27, 2, 6, 22, 26]:
+      if set != 26: continue
+      odObj = calcOD(ncFile, wn1, wn2, set, profile)
+      odObj.molIdx()
+      odObj.xsIdx()
+      odObj.calcAlt()
+
+      if set > 0: odObj.profSubset()
+
+      odObj.lblT5()
+    # end subset loop
   # end band loop
 # end profile loop
