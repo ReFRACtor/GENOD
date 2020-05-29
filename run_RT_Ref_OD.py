@@ -24,7 +24,7 @@ parser.add_argument('--end_wn', '-wn2', type=float, default=38000, \
 args = parser.parse_args()
 
 ncFile = args.nc_file; utils.file_check(ncFile)
-profiles = readProfiles(ncFile)
+profiles = readProfiles(ncFile, ppmv=True)
 nProf = profiles['VMR'].shape[0]
 
 # we have to work in 2000 cm-1 chunks for LBLRTM: figure out how many
@@ -46,13 +46,13 @@ for iProf in range(nProf):
   profile = singleProfile(profiles, iProf)
   for wn1, wn2 in zip(startWN, endWN):
     for set in [27, 2, 6, 22, 26]:
-      if set != 26: continue
+      #if set != 26: continue
       odObj = calcOD(ncFile, wn1, wn2, set, profile)
       odObj.molIdx()
       odObj.xsIdx()
       odObj.calcAlt()
 
-      if set > 0: odObj.profSubset()
+      if set != odObj.nProfMol: odObj.profSubset()
 
       odObj.lblT5()
     # end subset loop

@@ -34,11 +34,11 @@ class RTRefOD:
       profile -- dictionary from profile_extraction.singleProfile()
     """
 
-    self.ncFile = inFile
-    self.wn1 = startWN
-    self.wn2 = endWN
-    self.iSubset = subset
-    self.profile = profile
+    self.ncFile = str(inFile)
+    self.wn1 = float(startWN)
+    self.wn2 = float(endWN)
+    self.iSubset = int(subset)
+    self.profile = dict(profile)
     self.nLev = profile['VMR'].shape[1]
     self.nProfMol = profile['molecules'].shape[0]
 
@@ -53,6 +53,10 @@ class RTRefOD:
     # we are working on adding HCHO as a XS in the database
     # cannot find CHOHO (is it CHOCHO?)
     self.ignored = ['HDO', 'HCHO', 'CHOHO']
+
+    # these guys are HITRAN molecules AND cross section species,
+    # depending on the region. for the UV, they are only XS
+    self.molXS = ['SO2', 'NO2']
 
     if subset == self.nProfMol:
       self.subStr = 'all_molecules'
@@ -74,6 +78,7 @@ class RTRefOD:
 
     self.iMol = {}
     for iMol, mol in enumerate(self.molNamesHT):
+      if mol in self.molXS: continue
       if mol in profMol: self.iMol[mol.upper()] = profMol.index(mol)
     # end molecule loop
   # end molIdx()
@@ -88,8 +93,8 @@ class RTRefOD:
 
     self.iXS = {}
     for iMol, mol in enumerate(self.profile['molecules']):
-      if mol not in self.molNamesHT and mol not in self.ignored:
-        self.iXS[mol.upper()] = iMol
+      if (mol not in self.molNamesHT and mol not in self.ignored) or \
+          mol in self.molXS: self.iXS[mol.upper()] = iMol
     # end mol loop
     self.nXS = len(self.iXS.keys())
   # end xsIdx()
@@ -120,7 +125,7 @@ class RTRefOD:
     """
 
     # save current VMR profiles
-    cache = self.profile['VMR']
+    cache = np.array(self.profile['VMR'])
 
     # need the array (row) index subset HITRAN molecule or XS species
     try:
@@ -179,7 +184,7 @@ class RTRefOD:
     if not os.path.exists(self.outDirT5): os.makedirs(self.outDirT5)
 
     # problematic for fractional wavenumbers
-    outT5 = 'TAPE5_{0:05d}-{1:05d}_{2:s}'.format(
+    outT5 = 'TAPE5_{0:05.0f}-{1:05.0f}_{2:s}'.format(
       self.wn1, self.wn2, self.subStr)
     self.outT5 = os.path.join(self.outDirT5, outT5)
 
@@ -255,15 +260,16 @@ class RTRefOD:
       for iHT in range(self.nMolMax):
         nameHT = self.molNamesHT[iHT]
         if nameHT not in self.profile['molecules']: continue
-        lblAll[iHT] = \
-          self.profile['VMR'][self.iMol[nameHT], iLev] * 1e6
+        if nameHT in self.molXS: continue
+
+        lblAll[iHT] = self.profile['VMR'][self.iMol[nameHT], iLev]
 
         # sanity check
         #print('{:4e}'.format(lblAll[iHT]), iHT+1, self.iMol[iHT])
       # end molecule loop
 
       # start building the string for record 3.6
-      record36 = recordBlock(lblAll)
+      record36 = recordBlock(np.array(lblAll))
       records35_36.append(record36)
 
       # record 3.8.1: boundary pressure
@@ -272,18 +278,16 @@ class RTRefOD:
       record381 += ''.join(['A']*self.nXS) + '\n'
       records381_382.append(record381)
 
-      # record 3.8.2: layer molecule VMR, which should have been
-      # defined in when constructing records 3.5 and 3.6
-      # can combine these two since we're only doing 1 XS
-      # molecule per layer
-      record382 = recordBlock(xsAll)
+      # record 3.8.2: layer molecule VMR
+      record382 = recordBlock(np.array(xsAll))
       records381_382.append(record382)
     # end level loop
 
-    # combine the record lists into single strings
+    # strip off extra newlines
     records35_36 = ''.join(records35_36)[:-1]
     records381_382 = ''.join(records381_382)[:-1]
 
+    # combine the record lists into single strings
     records = [record11, record12, record13, \
       record31, record32, record33b, \
       record34, records35_36, record37, record371, \

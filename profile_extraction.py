@@ -6,9 +6,10 @@ import numpy as np
 sys.path.append('common')
 import utils
 
-def readProfiles(inFile):
+def readProfiles(inFile, ppmv=False):
   """
   inFile -- string, netCDF file with atmospheric profiles
+  ppmv -- boolean, convert VMR profiles to ppmv units
   """
 
   import netCDF4 as nc
@@ -25,7 +26,8 @@ def readProfiles(inFile):
 
     # atmospheric specs
     atmDict['molecules'] = nc.chartostring(absorb.variables['name'][:])
-    atmDict['VMR'] = absorb.variables['vmr'][:]
+    atmDict['VMR'] = absorb.variables['vmr'][:] * 1e6 if ppmv else \
+      absorb.variables['vmr'][:]
     atmDict['albedo'] = ground.variables['surface_albedo'][:]
 
     atmDict['level_P'] = atm.variables['pressure_levels'][:]
