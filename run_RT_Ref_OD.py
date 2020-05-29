@@ -46,11 +46,13 @@ for iProf in range(nProf):
   profile = singleProfile(profiles, iProf)
   for wn1, wn2 in zip(startWN, endWN):
     for set in [27, 2, 6, 22, 26]:
-      #if set != 26: continue
+      # full set of molecules and XS, then subset/single molecule
+      # these indices "keep" the molecule corresponding to the index
+      # and is used with profile['VMR']
       odObj = calcOD(ncFile, wn1, wn2, set, profile)
       odObj.molIdx()
       odObj.xsIdx()
-      odObj.calcAlt()
+      odObj.profO2(iProf)
 
       if set != odObj.nProfMol: odObj.profSubset()
 

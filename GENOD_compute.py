@@ -139,6 +139,30 @@ class RTRefOD:
     self.profile['VMR'][iCache] = cache[iCache]
   # end profSubset
 
+  def profO2(self, iProfile):
+    """
+    It is assumed that O2_profiles/* were generated with the default
+    configuration of o2_profiles.py and thus follow a specific naming
+    convention. these should be in version control.
+
+    NOTE: we are using the altitudes from the O2 profiles
+    (standard atmosphere calculation). calcAlt() altitudes are not
+    trusted.
+    """
+
+    import pandas as PD
+
+    fileO2 = os.path.join(
+      'O2_profiles', 'UV_O2_profile_{}.csv'.format(iProfile))
+    utils.file_check(fileO2)
+
+    dfO2 = PD.read_csv(fileO2)
+    self.levelZ = dfO2['ALT']
+    self.profileO2 = dfO2['O2'] * 1e6
+    self.profile['molecules'] = \
+      np.append((self.profile['molecules']), 'O2')
+  # end profO2()
+
   def lblT5(self):
     """
     Generate an LBLRTM TAPE5 for a given band and subset of molecules
@@ -251,18 +275,21 @@ class RTRefOD:
         for xs in self.iXS.keys()]
 
       record35 = '{0:10.3E}{1:10.3E}{2:10.3E}{3:5s}AA\n'.format(
-        self.profile['level_Z'][iLev], pLev,
-        self.profile['level_T'][iLev], '')
+        self.levelZ[iLev], pLev, self.profile['level_T'][iLev], '')
       records35_36.append(record35)
 
       # record 3.6: provide VMR at a given level
       lblAll = np.repeat(0.0, self.nMolMax)
       for iHT in range(self.nMolMax):
         nameHT = self.molNamesHT[iHT]
-        if nameHT not in self.profile['molecules']: continue
-        if nameHT in self.molXS: continue
+        if nameHT not in self.profile['molecules'] or \
+           nameHT in self.molXS: continue
 
-        lblAll[iHT] = self.profile['VMR'][self.iMol[nameHT], iLev]
+        if iHT == 6:
+          lblAll[iHT] = self.profileO2[iLev]
+        else:
+          lblAll[iHT] = self.profile['VMR'][self.iMol[nameHT], iLev]
+        # endif O2
 
         # sanity check
         #print('{:4e}'.format(lblAll[iHT]), iHT+1, self.iMol[iHT])
@@ -300,4 +327,14 @@ class RTRefOD:
     outFP.close()
     print('Built {}'.format(self.outT5))
   # end lblT5()
+
+  def runLBL(self):
+    """
+    Run LBLRTM on all of the TAPE5s generated with lblT5(), then
+    save the OD files with their own unique names that contain band,
+    subset, profile, and layer
+    """
+
+    import subprocess as sub
+  # end runLBL()
 # end LBLOD

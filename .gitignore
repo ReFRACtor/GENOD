@@ -7,3 +7,5 @@ README
 __pycache__/
 *.png
 *.pdf
+figures
+.DS_Store
