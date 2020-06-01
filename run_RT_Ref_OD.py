@@ -11,12 +11,6 @@ import build_models as BUILD
 from GENOD_compute import RTRefOD as calcOD
 from profile_extraction import readProfiles, singleProfile
 
-# defaults for AER systems
-DEFLNFL = '/nas/project/rc/rc1//lblrtm_local_version/' + \
-  'lblrtm_v12.9_linux_intel_dbl'
-DEFLBL = '/nas/project/rc/rc1/lnfl_local_version/' + \
-  'lnfl_v3.2_linux_intel_sgl'
-
 parser = argparse.ArgumentParser(\
   formatter_class=argparse.ArgumentDefaultsHelpFormatter, \
   description='Given profile specifications in a netCDF, ' + \
@@ -47,16 +41,16 @@ buildDict = {'compiler': 'ifort', 'ini': None, 'lnfl_path': 'LNFL', \
 
 exeLNFL = args.lnfl_exe
 if exeLNFL is None:
-  lnflObj = submodules(vars(args), lnfl=True)
+  lnflObj = BUILD.submodules(buildDict, lnfl=True)
   lnflObj.build()
   exeLNFL = lnflObj.pathLNFL
 # endif LNFL build
 
 exeLBL = args.lbl_exe
 if exeLBL is None:
-  lblObj = submodules(vars(args), lnfl=True)
+  lblObj = BUILD.submodules(buildDict, lbl=True)
   lblObj.build()
-  exeLBL = lnflObj.pathLBL
+  exeLBL = lblObj.pathLBL
 # endif LBL build
 
 exeAll = {'lnfl': exeLNFL, 'lbl': exeLBL}
