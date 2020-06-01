@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, sys
+import os, sys, glob
 import numpy as np
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'common'))
@@ -330,11 +330,33 @@ class RTRefOD:
 
   def runLBL(self):
     """
-    Run LBLRTM on all of the TAPE5s generated with lblT5(), then
+    Run LBLRTM on the TAPE5 generated with lblT5(), then
     save the OD files with their own unique names that contain band,
-    subset, profile, and layer
+    subset, and layer
     """
 
     import subprocess as sub
-  # end runLBL()
+
+    # stage files needed for these LBL runs
+    # dependent on LBLRTM submodule added to repo
+    if not os.path.islink('FSCDXS'):
+      os.symlink('LBLRTM/cross_sections/FSCDXS', 'FSCDXS')
+    if not os.path.islink('xs'):
+      os.symlink('LBLRTM/cross_sections/xs', 'xs')
+    if not os.path.islink('TAPE3'):
+      os.symlink('LNFL_Out/TAPE3', 'TAPE3')
+
+    #sub.call(['lblrtm'])
+
+    # directory for all of the OD files
+    self.outDirOD = self.outDirT5.replace('TAPE5', 'OD')
+    if not os.path.exists(self.outDirOD): os.makedirs(self.outDirOD)
+
+    odFiles = sorted(glob.glob('ODint_???'))
+    for odFile in odFiles:
+      outOD = os.path.join(self.outDirOD,
+        os.path.basename(self.outT5)).replace('TAPE5', odFile)
+      os.rename(odFile, outOD)
+    # end OD file loop
+  # end runLBL
 # end LBLOD
