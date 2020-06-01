@@ -183,7 +183,7 @@ class RTRefOD:
     See lblrtm_instructions.html that come with source code
     """
 
-    def recordBlock(param, format='{:10.3E}'):
+    def recordBlock(param, format='{:10.3E}', xs=False):
       """
       Records 3.3b, 3.6, and 3.8.2 are flexible in size, depending on
       the number of pressures or molecules being specified. The
@@ -197,20 +197,25 @@ class RTRefOD:
       Keywords
         format -- format string for a single value
           https://docs.python.org/3.4/library/string.html#formatexamples
+        xs -- boolean; first line in XS profile is a set of 7 names,
+          so this keyword takes that into account when constructing
+          the record
 
       Output
         outRec -- string, format block record
       """
+
+      nRecMol = 7 if xs else 8
 
       outRec = ''
       for iVal, val in enumerate(param):
         outRec += format.format(val)
 
         # eight molecules per line
-        if ((iVal+1) % 8) == 0: outRec += '\n'
+        if ((iVal+1) % nRecMol) == 0: outRec += '\n'
       # end record36 loop
 
-      # end of record, if nMol is not divisible by 8
+      # end of record, if nMol is not divisible by nRecMol
       if outRec[-1] != '\n': outRec += '\n'
 
       return outRec
@@ -273,8 +278,11 @@ class RTRefOD:
     record37 = '{0:5d}{1:5d}'.format(self.nXS, 0)
 
     # record 3.7.1: XS molecule name
-    record371 = ['{:10s}'.format(xs) for xs in self.iXS.keys()]
-    record371 = ''.join(record371)
+    record371 = recordBlock(self.iXS.keys(), format='{:10s}', xs=True)
+    record371 = record371[:-1]
+    #record371 = ['{:10s}'.format(xs) for xs in self.iXS.keys()]
+    #record371[70] = '\n'
+    #record371 = ''.join(record371)
 
     # record 3.8: n pressure levels, pressure used for "height"
     record38 = '{0:5d}{1:5d} XS User Profile'.format(self.nLev, 1)
@@ -319,7 +327,7 @@ class RTRefOD:
       records381_382.append(record381)
 
       # record 3.8.2: layer molecule VMR
-      record382 = recordBlock(np.array(xsAll))
+      record382 = recordBlock(np.array(xsAll), xs=True)
       records381_382.append(record382)
     # end level loop
 
