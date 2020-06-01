@@ -23,10 +23,15 @@ parser.add_argument('--start_wn', '-wn1', type=float, default=25000, \
   help='Starting wavenumber of the entire region of interest')
 parser.add_argument('--end_wn', '-wn2', type=float, default=38000, \
   help='Starting wavenumber of the entire region of interest')
+parser.add_argument('--line_file_dir', '-lines', type=str, \
+  help='Top-level directory that contains all AER Line File info.')
 parser.add_argument('--lnfl_exe', '-lnfl', type=str, \
   help='Path to LNFL executable')
 parser.add_argument('--lbl_exe', '-lbl', type=str, \
   help='Path to LBLRTM executable')
+parser.add_argument('--only_lbl', 'rt', action='store_true', \
+  help='Forego the LNFL and skip straight to radiative transfer ' + \
+  'modeling with LBLRTM (so TAPE3 already exists).')
 args = parser.parse_args()
 
 ncFile = args.nc_file; utils.file_check(ncFile)
@@ -35,16 +40,35 @@ nProf = profiles['VMR'].shape[0]
 
 # build models if necessary; start with dictionary that is necessary
 # for BUILD objects (see common/build_models.py)
+# eventually need more flexibility with these values
 buildDict = {'compiler': 'ifort', 'ini': None, 'lnfl_path': 'LNFL', \
   'lblrtm_path': 'LBLRTM', 'lines_path': 'AER_Line_File', \
   'record_id': 3837550, 'no_build': False, 'top_dir': os.getcwd()}
 
-exeLNFL = args.lnfl_exe
-if exeLNFL is None:
-  lnflObj = BUILD.submodules(buildDict, lnfl=True)
-  lnflObj.build()
-  exeLNFL = lnflObj.pathLNFL
-# endif LNFL build
+onlyRT = args.only_lbl
+if not args.onlyRT:
+  exeLNFL = args.lnfl_exe
+  if exeLNFL is None:
+    lnflObj = BUILD.submodules(buildDict, lnfl=True)
+    lnflObj.build()
+    exeLNFL = lnflObj.pathLNFL
+
+  # endif LNFL build
+
+  utils.file_check(exeLNFL)
+
+  lfpPath = args.line_file_dir
+  if lfpPath is None:
+    lfpObj = BUILD.submodules(buildDict, lines=True)
+    lfpObj.getLineFile()
+    lfpPath = buildDict['lines_path']
+  # endif line file
+
+  utils.file_check(buildDict['lines_path'])
+else:
+  exeLNFL = ''
+  lfpPath = ''
+# endif only_lbl
 
 exeLBL = args.lbl_exe
 if exeLBL is None:
@@ -52,9 +76,9 @@ if exeLBL is None:
   lblObj.build()
   exeLBL = lblObj.pathLBL
 # endif LBL build
+utils.file_check(exeLBL)
 
-exeAll = {'lnfl': exeLNFL, 'lbl': exeLBL}
-for exe in exeAll.keys(): utils.file_check(exeAll[exe])
+rtAll = {'lnfl': exeLNFL, 'lbl': exeLBL, 'lines': lfpPath}
 
 # we have to work in 2000 cm-1 chunks for LBLRTM: figure out how many
 # bands are needed for the given region
@@ -78,7 +102,7 @@ for iProf in range(nProf):
       # full set of molecules and XS, then subset/single molecule
       # these indices "keep" the molecule corresponding to the index
       # and is used with profile['VMR']
-      odObj = calcOD(ncFile, wn1, wn2, set, profile, exeAll)
+      odObj = calcOD(ncFile, wn1, wn2, set, profile, rtAll)
 
       # set up for the model runs (create inputs)
       odObj.molIdx()
@@ -91,7 +115,8 @@ for iProf in range(nProf):
 
       # run the model; the same TAPE3 will be used for all
       # profiles, subsets, and bands
-      if not os.path.exists('TAPE3'): odObj.runLNFL
+      if not onlyRT: odObj.runLNFL()
+
       odObj.runLBL()
     # end subset loop
   # end band loop
