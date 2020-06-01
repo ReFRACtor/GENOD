@@ -29,7 +29,7 @@ parser.add_argument('--lnfl_exe', '-lnfl', type=str, \
   help='Path to LNFL executable')
 parser.add_argument('--lbl_exe', '-lbl', type=str, \
   help='Path to LBLRTM executable')
-parser.add_argument('--only_lbl', 'rt', action='store_true', \
+parser.add_argument('--only_lbl', '-rt', action='store_true', \
   help='Forego the LNFL and skip straight to radiative transfer ' + \
   'modeling with LBLRTM (so TAPE3 already exists).')
 args = parser.parse_args()
@@ -46,7 +46,7 @@ buildDict = {'compiler': 'ifort', 'ini': None, 'lnfl_path': 'LNFL', \
   'record_id': 3837550, 'no_build': False, 'top_dir': os.getcwd()}
 
 onlyRT = args.only_lbl
-if not args.onlyRT:
+if not onlyRT:
   exeLNFL = args.lnfl_exe
   if exeLNFL is None:
     lnflObj = BUILD.submodules(buildDict, lnfl=True)
@@ -115,9 +115,11 @@ for iProf in range(nProf):
 
       # run the model; the same TAPE3 will be used for all
       # profiles, subsets, and bands
-      if not onlyRT: odObj.runLNFL()
+      if not onlyRT and not os.path.exists('TAPE3'):
+        odObj.runLNFL()
 
       odObj.runLBL()
+      sys.exit()
     # end subset loop
   # end band loop
 # end profile loop

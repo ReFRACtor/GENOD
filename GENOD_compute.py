@@ -51,7 +51,7 @@ class RTRefOD:
 
     # this is in version control
     self.lnflT5 = 'LNFL_TAPE5'
-    utils.file_check(self.lnffT5)
+    utils.file_check(self.lnflT5)
 
     # HITRAN stuff; 'molecules.txt' is in version control
     htList = 'molecules.txt'
@@ -353,7 +353,8 @@ class RTRefOD:
     # stage files necessary for LNFL run
     # assuming the directory structure convention we establish in
     # common/build_models.getLineFile()
-    lfpFiles = glob.glob(os.path.join(self.pathLines, 'line_file'))
+    lfpFiles = glob.glob(\
+      os.path.join(self.pathLines, 'line_file')+'/*')
     for lfpFile, alias in zip(lfpFiles, ['TAPE1', 'TAPE2']):
       if os.path.islink(alias): os.unlink(alias)
       os.symlink(lfpFile, alias)
@@ -361,12 +362,13 @@ class RTRefOD:
 
     # broadening and speed dependence parameters
     brdFiles = glob.glob(\
-      os.path.join(self.pathLines, 'extra_brd_params'))
+      os.path.join(self.pathLines, 'extra_brd_params') + '/*')
     for brdFile in brdFiles:
-      is os.path.islink(alias): os.unlink(alias)
+      if os.path.islink(alias): os.unlink(alias)
       os.symlink(brdFile, os.path.basename(brdFile))
     # end broadening file loop
 
+    print('Running LNFL')
     sub.call([self.pathLNFL])
   # end runLNFL
 
@@ -391,6 +393,7 @@ class RTRefOD:
     if os.path.islink('TAPE5'): os.unlink('TAPE5')
     os.symlink(self.outT5, 'TAPE5')
 
+    print('Running LBL')
     sub.call([self.pathLBL])
 
     # directory for all of the OD files
