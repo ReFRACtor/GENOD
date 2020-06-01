@@ -2,12 +2,14 @@
 
 import os, sys, glob
 import numpy as np
+import subprocess as sub
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'common'))
 import utils
 
 class RTRefOD:
-  def __init__(self, inFile, startWN, endWN, subset, profile):
+  def __init__(self, inFile, startWN, endWN, subset, profile, \
+    exePaths):
     """
     Radiative Transfer Reference Optical Depths
 
@@ -32,6 +34,7 @@ class RTRefOD:
         JPL profiles (profile['molecules']) of the molecule to "keep",
         with subset=nMol being the full set of molecules
       profile -- dictionary from profile_extraction.singleProfile()
+      exePaths -- dictionary with LNFL and LBLRTM executable paths
     """
 
     self.ncFile = str(inFile)
@@ -41,10 +44,16 @@ class RTRefOD:
     self.profile = dict(profile)
     self.nLev = profile['VMR'].shape[1]
     self.nProfMol = profile['molecules'].shape[0]
+    self.pathLNFL = exePaths['lnfl']
+    self.pathLBL = exePaths['lbl']
 
     # HITRAN stuff; 'molecules.txt' is in version control
     htList = 'molecules.txt'
-    utils.file_check(htList)
+
+    paths = [self.ncFile, self.pathLNFL, self.pathLBL, htList]
+    for path in paths: utils.file_check(path)
+
+    # grab HITRAN metadata
     inDat = open(htList).read().splitlines()
     self.molNamesHT = [mol.split("_")[1] for mol in inDat]
     self.nMolMax = len(self.molNamesHT)
@@ -328,14 +337,21 @@ class RTRefOD:
     print('Built {}'.format(self.outT5))
   # end lblT5()
 
+  def runLNFL(self):
+    """
+    Run LNFL with the version-controlled LNFL_TAPE5 so we can produce
+    a TAPE3 necessary for the LBLRTM runs in runLBL()
+    """
+
+    
+  # end runLNFL
+
   def runLBL(self):
     """
     Run LBLRTM on the TAPE5 generated with lblT5(), then
     save the OD files with their own unique names that contain band,
     subset, and layer
     """
-
-    import subprocess as sub
 
     # stage files needed for these LBL runs
     # dependent on LBLRTM submodule added to repo
@@ -346,7 +362,7 @@ class RTRefOD:
     if not os.path.islink('TAPE3'):
       os.symlink('LNFL_Out/TAPE3', 'TAPE3')
 
-    #sub.call(['lblrtm'])
+    sub.call([self.pathLBL])
 
     # directory for all of the OD files
     self.outDirOD = self.outDirT5.replace('TAPE5', 'OD')
