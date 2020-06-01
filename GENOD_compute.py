@@ -9,7 +9,7 @@ import utils
 
 class RTRefOD:
   def __init__(self, inFile, startWN, endWN, subset, profile, \
-    exePaths):
+    rtPaths):
     """
     Radiative Transfer Reference Optical Depths
 
@@ -34,7 +34,8 @@ class RTRefOD:
         JPL profiles (profile['molecules']) of the molecule to "keep",
         with subset=nMol being the full set of molecules
       profile -- dictionary from profile_extraction.singleProfile()
-      exePaths -- dictionary with LNFL and LBLRTM executable paths
+      rtPaths -- dictionary with LNFL and LBLRTM executable paths
+        as well as the top-level directory for the AER Line File
     """
 
     self.ncFile = str(inFile)
@@ -44,14 +45,17 @@ class RTRefOD:
     self.profile = dict(profile)
     self.nLev = profile['VMR'].shape[1]
     self.nProfMol = profile['molecules'].shape[0]
-    self.pathLNFL = exePaths['lnfl']
-    self.pathLBL = exePaths['lbl']
+    self.pathLNFL = rtPaths['lnfl']
+    self.pathLBL = rtPaths['lbl']
+    self.pathLines = rtPaths['lines']
+
+    # this is in version control
+    self.lnflT5 = 'LNFL_TAPE5'
+    utils.file_check(self.lnffT5)
 
     # HITRAN stuff; 'molecules.txt' is in version control
     htList = 'molecules.txt'
-
-    paths = [self.ncFile, self.pathLNFL, self.pathLBL, htList]
-    for path in paths: utils.file_check(path)
+    utils.file_check(htList)
 
     # grab HITRAN metadata
     inDat = open(htList).read().splitlines()
@@ -343,7 +347,27 @@ class RTRefOD:
     a TAPE3 necessary for the LBLRTM runs in runLBL()
     """
 
-    
+    if os.path.exists('TAPE5'): os.remove('TAPE5')
+    os.symlink(self.lnflT5, 'TAPE5')
+
+    # stage files necessary for LNFL run
+    # assuming the directory structure convention we establish in
+    # common/build_models.getLineFile()
+    lfpFiles = glob.glob(os.path.join(self.pathLines, 'line_file'))
+    for lfpFile, alias in zip(lfpFiles, ['TAPE1', 'TAPE2']):
+      if os.path.islink(alias): os.unlink(alias)
+      os.symlink(lfpFile, alias)
+    # end line file loop
+
+    # broadening and speed dependence parameters
+    brdFiles = glob.glob(\
+      os.path.join(self.pathLines, 'extra_brd_params'))
+    for brdFile in brdFiles:
+      is os.path.islink(alias): os.unlink(alias)
+      os.symlink(brdFile, os.path.basename(brdFile))
+    # end broadening file loop
+
+    sub.call([self.pathLNFL])
   # end runLNFL
 
   def runLBL(self):
@@ -355,12 +379,17 @@ class RTRefOD:
 
     # stage files needed for these LBL runs
     # dependent on LBLRTM submodule added to repo
+    # these likely do not need to be overwritten (assuming LNFL
+    # was run and produced a TAPE3 for this project)
     if not os.path.islink('FSCDXS'):
       os.symlink('LBLRTM/cross_sections/FSCDXS', 'FSCDXS')
     if not os.path.islink('xs'):
       os.symlink('LBLRTM/cross_sections/xs', 'xs')
-    if not os.path.islink('TAPE3'):
-      os.symlink('LNFL_Out/TAPE3', 'TAPE3')
+    if not os.path.exists('TAPE3'):
+      print('TAPE3 not found -- consider running runLNFL()')
+
+    if os.path.islink('TAPE5'): os.unlink('TAPE5')
+    os.symlink(self.outT5, 'TAPE5')
 
     sub.call([self.pathLBL])
 
