@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os, sys, argparse
+import numpy as np
 
 # Git submodules
 sys.path.append(os.path.join(os.path.dirname(__file__), 'common'))
@@ -9,6 +10,7 @@ import build_models as BUILD
 
 # local modules
 from GENOD_compute import RTRefOD as calcOD
+from GENOD_compute import GENOD_netCDF as GNC
 from profile_extraction import readProfiles, singleProfile
 
 parser = argparse.ArgumentParser(\
@@ -71,12 +73,14 @@ else:
 # endif only_lbl
 
 exeLBL = args.lbl_exe
+"""
 if exeLBL is None:
   lblObj = BUILD.submodules(buildDict, lbl=True)
   lblObj.build()
   exeLBL = lblObj.pathLBL
 # endif LBL build
 utils.file_check(exeLBL)
+"""
 
 rtAll = {'lnfl': exeLNFL, 'lbl': exeLBL, 'lines': lfpPath}
 
@@ -94,16 +98,17 @@ while wn <= regEndWN:
   wn += wnChunk
 # end while
 
-# we'll do a separate object per band per profile
-for iProf in range(nProf):
-  profile = singleProfile(profiles, iProf)
-  for wn1, wn2 in zip(startWN, endWN):
-    # TODO: flexibility with the subsets
-    for set in [27, 2, 6, 22, 26]:
+# we'll do a separate object per subset per band per profile
+# TODO: flexibility with the subsets (also list available subsets)
+for set in [27, 2, 6, 22, 26]:
+  for iProf in range(nProf):
+    profile = singleProfile(profiles, iProf)
+    for wn1, wn2 in zip(startWN, endWN):
       # full set of molecules and XS, then subset/single molecule
       # these indices "keep" the molecule corresponding to the index
       # and is used with profile['VMR']
       odObj = calcOD(ncFile, wn1, wn2, set, profile, rtAll)
+      continue
 
       # set up for the model runs (create inputs)
       odObj.molIdx()
@@ -116,10 +121,14 @@ for iProf in range(nProf):
 
       # run the model; the same TAPE3 will be used for all
       # profiles, subsets, and bands
-      if not onlyRT and not os.path.exists('TAPE3'):
-        odObj.runLNFL()
+      if not onlyRT and not os.path.exists('TAPE3'): odObj.runLNFL()
 
       odObj.runLBL()
-    # end subset loop
-  # end band loop
-# end profile loop
+    # end band loop
+  # end profile loop
+
+  bandArr = np.array((startWN, endWN)).T
+  gncObj = GNC('LBL_OD_dir', odObj.subStr, profiles, bandArr)
+  gncObj.getFilesOD()
+  gncObj.arrOD()
+# end subset loop
