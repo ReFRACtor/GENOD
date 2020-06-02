@@ -391,11 +391,10 @@ class RTRefOD:
     # dependent on LBLRTM submodule added to repo
     # these likely do not need to be overwritten (assuming LNFL
     # was run and produced a TAPE3 for this project)
-    # TODO: links don't work on rd47: have to do this manually
     if not os.path.islink('FSCDXS'):
-      os.symlink('LBLRTM/cross_sections/FSCDXS', 'FSCDXS')
+      os.symlink('LBLRTM/cross-sections/FSCDXS', 'FSCDXS')
     if not os.path.islink('xs'):
-      os.symlink('LBLRTM/cross_sections/xs', 'xs')
+      os.symlink('LBLRTM/cross-sections/xs', 'xs')
     if not os.path.exists('TAPE3'):
       print('TAPE3 not found -- consider running runLNFL()')
 
