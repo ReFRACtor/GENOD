@@ -19,8 +19,6 @@ class RTRefOD:
       cm-1 broken up into 2000 cm-1 chunks for LBLRTM)
     - Build TAPE3 (binary line file) for bands
     - Run LBLRTM to generate ODInt files
-    - Use the ODInt files determine path-integrated optical depth and
-      store in netCDF file
 
     Generate optical depth tables (OD as a function of
     wavenumber, pressure, temperature, and band) for specified
@@ -391,11 +389,10 @@ class RTRefOD:
     # dependent on LBLRTM submodule added to repo
     # these likely do not need to be overwritten (assuming LNFL
     # was run and produced a TAPE3 for this project)
-    # TODO: links don't work on rd47: have to do this manually
     if not os.path.islink('FSCDXS'):
-      os.symlink('LBLRTM/cross_sections/FSCDXS', 'FSCDXS')
+      os.symlink('LBLRTM/cross-sections/FSCDXS', 'FSCDXS')
     if not os.path.islink('xs'):
-      os.symlink('LBLRTM/cross_sections/xs', 'xs')
+      os.symlink('LBLRTM/cross-sections/xs', 'xs')
     if not os.path.exists('TAPE3'):
       print('TAPE3 not found -- consider running runLNFL()')
 
@@ -423,4 +420,112 @@ class RTRefOD:
       os.rename('TAPE6', os.path.join(dirT6, outT6))
     # end TAPE6
   # end runLBL
-# end LBLOD
+# end RTRefOD
+
+class GENOD_netCDF:
+  def __init__(self, odDir, subset, profiles, bands):
+    """
+    Generate a netCDF for a given a subset of molecules and a set of
+    ODInt files from LBLRTM that were generated with RTRefOD. The
+    file will contain an (nLay x nWN x nProf) array of optical
+    depths as well as pressure levels and spectral points
+    (wavenumbers) used
+
+    'all_molecule' subset ODs are the column-integrated ODs
+    other, single-molecule subsets ODs are layer ODs
+
+    Input
+      odDir -- string, path to OD files generated with RTRefOD
+      subset -- string, indicates what subset of molecules for which
+        to create an OD netCDF
+      profiles -- dictionary, output from
+        profile_extraction.readProfiles()
+      bands -- nBands x 2 array of starting and ending wavenumbers
+        for each band used in the RTRefOD.runLBL()
+    """
+
+    self.odDir = odDir; utils.file_check(odDir)
+    self.subStr = subset
+    self.profiles = profiles
+    self.bands = bands
+
+    # dimensions for netCDF file
+    profShape = self.profiles['level_P'].shape
+    self.nLay = profShape[1]-2 # TODO: HARDCODED!
+    self.nBands = bands.shape[0]
+    self.nProf = profShape[0]
+  # end constructor
+
+  def getFilesOD(self):
+    """
+    For a molecule subset, gather all LBLRTM OD(int) files and
+    organize by profile time
+    """
+
+    # there should be one subdirectory per profile time
+    subDirs = self.profiles['time']
+
+    self.odFiles = {}
+    for iSub, subDir in enumerate(subDir):
+      search = 'ODint_*_*_{}'.format(self.subStr)
+      search = os.path.join(self.odDir, subDirs[0], search)
+      self.odFiles[subDir] = sorted(glob.glob(search))
+    # end subdir loop
+
+    keys = self.odFiles.keys()
+    nFileOD = []
+    for key in keys: nFileOD.append(len(self.odFiles[key]))
+
+    # for now, all profiles are required to have the same number of
+    # of layers; this may not always be the case, so more flexibility
+    # here is on the TODO list
+    if not np.all(np.array(nFileOD) == self.nLay * self.nBands):
+      print('Profiles must have equal number of OD files, exiting')
+      sys.exit(1)
+    # endif nFileOD
+  # end getFilesOD()
+
+  def arrOD(self):
+    """
+    Read LBLRTM optical depth files and populate them intoan
+    (nLay x nWN x nProf) array of ODs
+    """
+
+    # Git submodule
+    import lblTools
+
+    # array will be constructed by appending arrays onto lists for
+    # a given dimension, then converting to an array
+    # not particularly efficient
+    profDim = []
+    for prof in self.odFiles.keys():
+      odFiles = self.odFiles[prof]
+      layDim = []
+
+      for iLay in range(1, self.nLay+1):
+        bandDim = []
+
+        for wn1, wn2 in self.bandArr:
+          for odFile in odFiles:
+            base = os.path.basename(odFile)
+            if not (iLay in base and wn1 in base and wn2 in base):
+              continue
+
+            # TODO: save the WN, too!
+            wn, od = lblTools.readOD(odFile, double=True)
+            bandDim.append(od)
+          # end odFile loop
+        # end band loop
+        layDim.append(bandDim)
+      # end layer loop
+      profDim.append(layDim)
+    # end profile loop
+    self.allOD = np.array(profDim)
+  # end arrOD()
+
+  def writeNC(self):
+    """
+    Write the OD netCDF
+    """
+  # end writeNC()
+# end GENOD_netCDF
