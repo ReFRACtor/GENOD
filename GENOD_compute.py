@@ -420,7 +420,7 @@ class RTRefOD:
       outT6 = os.path.basename(self.outT5).replace('TAPE5', 'TAPE6')
       dirT6 = self.outDirOD.replace('OD', 'TAPE6')
       if not os.path.exists(dirT6): os.makedirs(dirT6)
-      os.rename('TAPE6', os.path.join(dirT6, 'TAPE6'))
+      os.rename('TAPE6', os.path.join(dirT6, outT6))
     # end TAPE6
   # end runLBL
 # end LBLOD
