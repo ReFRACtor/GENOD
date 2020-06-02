@@ -13,3 +13,16 @@ FSCDXS
 xs
 TAPE*
 LBL_OD_dir
+AER_Line_File/
+LICENSE
+co2_co2_brd_param
+co2_h2o_brd_param
+extra_brd_params
+md5sums.txt
+o2_h2o_brd_param
+o2_o2_brd_param
+o2_uv_brd_param
+spd_dep_param
+wv_co2_brd_param
+zenodo_archive_list.txt
+

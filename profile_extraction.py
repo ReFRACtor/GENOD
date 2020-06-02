@@ -72,7 +72,7 @@ def singleProfile(inDict, iProf, aboveSurface=True):
 
   if aboveSurface:
     iPosAlt = np.where(
-      singleAtm['level_P'] <= singleAtm['surface_P'])[0]
+      singleAtm['level_P'] < singleAtm['surface_P'])[0]
     if iPosAlt.size == 0:
       print('Found no levels above the surface')
 

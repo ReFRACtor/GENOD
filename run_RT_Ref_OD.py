@@ -40,7 +40,7 @@ nProf = profiles['VMR'].shape[0]
 
 # build models if necessary; start with dictionary that is necessary
 # for BUILD objects (see common/build_models.py)
-# eventually need more flexibility with these values
+# TODO: need more flexibility with these values
 buildDict = {'compiler': 'ifort', 'ini': None, 'lnfl_path': 'LNFL', \
   'lblrtm_path': 'LBLRTM', 'lines_path': 'AER_Line_File', \
   'record_id': 3837550, 'no_build': False, 'top_dir': os.getcwd()}
@@ -98,6 +98,7 @@ while wn <= regEndWN:
 for iProf in range(nProf):
   profile = singleProfile(profiles, iProf)
   for wn1, wn2 in zip(startWN, endWN):
+    # TODO: flexibility with the subsets
     for set in [27, 2, 6, 22, 26]:
       # full set of molecules and XS, then subset/single molecule
       # these indices "keep" the molecule corresponding to the index
@@ -119,7 +120,6 @@ for iProf in range(nProf):
         odObj.runLNFL()
 
       odObj.runLBL()
-      sys.exit()
     # end subset loop
   # end band loop
 # end profile loop

@@ -327,7 +327,7 @@ class RTRefOD:
       records381_382.append(record381)
 
       # record 3.8.2: layer molecule VMR
-      record382 = recordBlock(np.array(xsAll), xs=True)
+      record382 = recordBlock(np.array(xsAll))
       records381_382.append(record382)
     # end level loop
 
@@ -391,6 +391,7 @@ class RTRefOD:
     # dependent on LBLRTM submodule added to repo
     # these likely do not need to be overwritten (assuming LNFL
     # was run and produced a TAPE3 for this project)
+    # TODO: links don't work on rd47: have to do this manually
     if not os.path.islink('FSCDXS'):
       os.symlink('LBLRTM/cross_sections/FSCDXS', 'FSCDXS')
     if not os.path.islink('xs'):
@@ -414,5 +415,12 @@ class RTRefOD:
         os.path.basename(self.outT5)).replace('TAPE5', odFile)
       os.rename(odFile, outOD)
     # end OD file loop
+
+    if os.path.exists('TAPE6'):
+      outT6 = os.path.basename(self.outT5).replace('TAPE5', 'TAPE6')
+      dirT6 = self.outDirOD.replace('OD', 'TAPE6')
+      if not os.path.exists(dirT6): os.makedirs(dirT6)
+      os.rename('TAPE6', os.path.join(dirT6, 'TAPE6'))
+    # end TAPE6
   # end runLBL
 # end LBLOD
