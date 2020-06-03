@@ -444,22 +444,49 @@ class GENOD_netCDF:
         for each band used in the RTRefOD.runLBL()
 
     Keywords
-      totalOD -- boolean, compute column-integrated optical depth 
+      totalOD -- boolean, compute column-integrated optical depth
         at each layer (default is to just store OD for a given layer)
     """
 
-    self.odDir = odDir; utils.file_check(odDir)
-    self.subStr = subset
-    self.profiles = profiles
-    self.bands = bands
-    self.totalOD = totalOD
+    self.odDir = str(odDir); utils.file_check(odDir)
+    self.subStr = str(subset)
+    self.profiles = dict(profiles)
+    self.bands = np.array(bands)
+    self.totalOD = bool(totalOD)
+
+    self.nBands = bands.shape[0]
+    self.chunkSize = 5000
+    self.compressLev = 4
+
+    # put the netCDF files in a separate subdirectory
+    self.ncDir = 'OD_netCDF'
+    if not os.path.exists(self.ncDir): os.makedirs(self.ncDir)
+  # end constructor
+
+  def getProfP(self):
+    """
+    Not all of the pressures provided in the user profiles may have
+    been necessarily used in the OD calculation, and we need to
+    reverse the profiles, so this method extracts the profiles used
+    and reverses the direction to TOA-to-Surface
+    """
+
+    # local module
+    from profile_extraction import singleProfile
+
+    newP = []
+    for iProf, profile in enumerate(self.profiles['level_P']):
+      profP = singleProfile(self.profiles, iProf)['level_P']
+      newP.append(profP[::-1])
+    # end profile loop
+
+    self.profP = np.array(newP)
 
     # dimensions for netCDF file
-    profShape = self.profiles['level_P'].shape
-    self.nLay = profShape[1]-2 # TODO: HARDCODED!
-    self.nBands = bands.shape[0]
+    profShape = self.profP.shape
+    self.nLay = profShape[1]-1
     self.nProf = profShape[0]
-  # end constructor
+  # end getProfP()
 
   def getFilesOD(self):
     """
@@ -506,12 +533,11 @@ class GENOD_netCDF:
     # a given dimension, then converting to an array
     # not particularly efficient
     profDim = []
-    for iProf, prof in enumerate(self.odFiles.keys()):
-      odFiles = self.odFiles[prof]
+    for iProf, prof in enumerate(self.profiles['time']):
       layDim = []
 
-      # LBL returns computations from the surface to TOA, but 
-      # we will calculate total OD from TOA to surface, so we 
+      # LBL returns computations from the surface to TOA, but
+      # we will calculate total OD from TOA to surface, so we
       # have to work backwards
       for iLay in range(self.nLay, 0, -1):
         bandDim = []
@@ -542,6 +568,7 @@ class GENOD_netCDF:
 
     self.allOD = np.array(profDim)
     self.allWN = np.array(wnAll)
+    self.nWN = self.allWN.size
 
     # integrate OD along column if we're using all molecules
     if self.totalOD: self.allOD = self.allOD.cumsum(axis=1)
@@ -551,5 +578,83 @@ class GENOD_netCDF:
     """
     Write the OD netCDF
     """
+
+    import netCDF4 as nc
+
+    ncFile = 'LBLRTM_OD_{}.nc'.format(self.subStr)
+    ncFile = os.path.join(self.ncDir, ncFile)
+    print('Building {}'.format(ncFile))
+
+    npzDat = np.load('temp.npz')
+    self.allOD = npzDat['od']
+    self.allWN = npzDat['wn']
+    self.nWN = self.allWN.size
+
+    # switch around the dimensions of the OD array for easier viewing
+    # in hdfview in mind
+    ncOD = np.transpose(self.allOD, axes=(2,1,0))
+
+    outFP = nc.Dataset(ncFile, 'w')
+    outFP.set_fill_on()
+
+    outFP.description = 'Optical depths for {} '.format(self.subStr)
+    outFP.description += 'as a function of pressure and wavenumber'
+
+    outFP.source = 'Profile: JPL; Optical Depths: AER'
+
+    dimNames = ['wavenumber', 'layers', 'profiles', 'levels']
+    dimVals = [self.nWN, self.nLay, self.nProf, self.nLay+1]
+    dimOD = ('wavenumber', 'layers', 'profiles')
+
+    for name, val in zip(dimNames, dimVals):
+      outFP.createDimension(name, val)
+
+    # use chunking for the OD array (stolen from ABSCO code)
+    inDims = ncOD.shape
+    chunksizes = list(inDims)
+    chunksizes[0] = min(inDims[0], self.chunkSize)
+
+    # now onto the variables
+    # need to reverse the pressure levels because we go
+    # TOA-to-surface in arrOD() calculations
+    outVar = outFP.createVariable('P_level', float, \
+      ('profiles', 'levels'), zlib=True, complevel=self.compressLev, \
+      fill_value=np.nan)
+    outVar[:] = self.profP[:, ::-1]
+    outVar.units = 'mbar'
+    outVar.long_name = 'Pressure Levels'
+    outVar.valid_range = (0, 1050)
+    outVar.description = 'JPL-provided layer boundary pressures'
+
+    # optical depth values will depend on subset of molecules
+    # all molecules: column-integrated OD; subsets: layer-OD
+    if self.subStr == 'all_molecules':
+      odDesc = 'TOA-to-layer path-integrated optical depths'
+      odName = 'Path-integrated OD'
+    else:
+      odDesc = 'Layer-specific optical depths'
+      odName = 'Layer OD'
+    # endif subStr
+    odName = 'LBLRTM-calculated ' + odName
+
+    outVar = outFP.createVariable('LBLRTM_Optical_Depth', float, \
+      dimOD, zlib=True, complevel=self.compressLev, \
+      chunksizes=chunksizes, fill_value=np.nan)
+    outVar[:] = np.ma.array(ncOD, mask=np.isnan(ncOD))
+    outVar.units = 'unitless'
+    outVar.long_name = odName
+    outVar.valid_range = (0, 1e20)
+    outVar.description = odDesc
+
+    outVar = outFP.createVariable('Spectral_Grid', float, \
+      ('wavenumber'), zlib=True, complevel=self.compressLev, \
+      fill_value=np.nan)
+    outVar[:] = self.allWN
+    outVar.units = 'cm-1'
+    outVar.long_name = 'Spectral Points'
+    outVar.valid_range = (0, 50000)
+    outVar.description = 'Spectral points corresponding to ODs'
+
+    outFP.close()
   # end writeNC()
 # end GENOD_netCDF

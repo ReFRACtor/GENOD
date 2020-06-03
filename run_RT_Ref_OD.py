@@ -34,6 +34,10 @@ parser.add_argument('--lbl_exe', '-lbl', type=str, \
 parser.add_argument('--only_lbl', '-rt', action='store_true', \
   help='Forego the LNFL and skip straight to radiative transfer ' + \
   'modeling with LBLRTM (so TAPE3 already exists).')
+parser.add_argument('--only_netcdf', '-nc', action='store_true', \
+  help='If LBLRTM has already been run and the OD files have ' + \
+  'been stored to disk, this option can be used to just generate ' + \
+  'the corresponding netCDF file.')
 args = parser.parse_args()
 
 ncFile = args.nc_file; utils.file_check(ncFile)
@@ -48,7 +52,8 @@ buildDict = {'compiler': 'ifort', 'ini': None, 'lnfl_path': 'LNFL', \
   'record_id': 3837550, 'no_build': False, 'top_dir': os.getcwd()}
 
 onlyRT = args.only_lbl
-if not onlyRT:
+onlyNC = args.only_netcdf
+if not onlyRT or not onlyNC:
   exeLNFL = args.lnfl_exe
   if exeLNFL is None:
     lnflObj = BUILD.submodules(buildDict, lnfl=True)
@@ -70,17 +75,19 @@ if not onlyRT:
 else:
   exeLNFL = ''
   lfpPath = ''
-# endif only_lbl
+# endif only_lbl/only_netcdf
 
 exeLBL = args.lbl_exe
-"""
-if exeLBL is None:
-  lblObj = BUILD.submodules(buildDict, lbl=True)
-  lblObj.build()
-  exeLBL = lblObj.pathLBL
-# endif LBL build
-utils.file_check(exeLBL)
-"""
+if not onlyNC:
+  if exeLBL is None:
+    lblObj = BUILD.submodules(buildDict, lbl=True)
+    lblObj.build()
+    exeLBL = lblObj.pathLBL
+  # endif LBL build
+  utils.file_check(exeLBL)
+else:
+  exeLBL = ''
+# endif only_netcdf
 
 rtAll = {'lnfl': exeLNFL, 'lbl': exeLBL, 'lines': lfpPath}
 
@@ -109,7 +116,7 @@ for set in [27]:
       # these indices "keep" the molecule corresponding to the index
       # and is used with profile['VMR']
       odObj = calcOD(ncFile, wn1, wn2, set, profile, rtAll)
-      continue
+      if onlyNC: continue
 
       # set up for the model runs (create inputs)
       odObj.molIdx()
@@ -132,6 +139,7 @@ for set in [27]:
   bandArr = np.array((startWN, endWN)).T
   gncObj = GNC('LBL_OD_dir', odObj.subStr, profiles, bandArr, \
     totalOD=totOD)
-  gncObj.getFilesOD()
+  gncObj.getProfP()
   gncObj.arrOD()
+  gncObj.writeNC()
 # end subset loop
