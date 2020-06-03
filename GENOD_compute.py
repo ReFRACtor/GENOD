@@ -236,12 +236,14 @@ class RTRefOD:
 
     # record1.2: HI, F4: spectral line application
     # CN=1: all continua calculated, including Rayleigh extinction
-    #   where applicable
+    #   where applicable; but when we do subsets we need CN=0
     # OD=1, MG=1: optical depth computation, layer-by-layer
     # include lines and cross sections; use LBLATM
-    record12 = ' HI=1 F4=1 CN=1 AE=0 EM=0 SC=0 FI=0 PL=0 ' + \
+    record12 = ' HI=1 F4=1 CN=0 AE=0 EM=0 SC=0 FI=0 PL=0 ' + \
       'TS=0 AM=1 MG=1 LA=0 OD=1 XS=1'
     record12 += '{:>20s}'.format('1')
+    if self.subStr == 'all_molecules':
+      record12.replace('CN=0', 'CN=1')
 
     # record 1.3 is kinda long...first, band limits
     record13 = '{0:10.3e}{1:10.3e}'.format(self.wn1, self.wn2)
@@ -304,7 +306,7 @@ class RTRefOD:
         if nameHT not in self.profile['molecules'] or \
            nameHT in self.molXS: continue
 
-        if iHT == 6:
+        if iHT == 6 and self.subStr == 'all_molecules':
           lblAll[iHT] = self.profileO2[iLev]
         else:
           lblAll[iHT] = self.profile['VMR'][self.iMol[nameHT], iLev]
@@ -604,6 +606,14 @@ class GENOD_netCDF:
     for name, val in zip(dimNames, dimVals):
       outFP.createDimension(name, val)
 
+    # hack job for time string ID
+    timeArr = atm['time']
+    ncObj.createDimension('string', timeArr.shape[1])
+    timeDim = ('prof', 'string')
+    outVar = ncObj.createVariable('profile_time', \
+      timeArr.dtype.str, timeDim, zlib=True)
+    outVar[:] = nc.stringtochar(atm['time'])
+
     # use chunking for the OD array (stolen from ABSCO code)
     inDims = ncOD.shape
     chunksizes = list(inDims)
@@ -615,7 +625,7 @@ class GENOD_netCDF:
     outVar = outFP.createVariable('P_level', float, \
       ('profiles', 'levels'), zlib=True, complevel=self.compressLev, \
       fill_value=np.nan)
-    outVar[:] = self.profP[:, ::-1]
+    outVar[:] = np.array(self.profP)
     outVar.units = 'mbar'
     outVar.long_name = 'Pressure Levels'
     outVar.valid_range = (0, 1050)
@@ -631,6 +641,8 @@ class GENOD_netCDF:
       odName = 'Layer OD'
     # endif subStr
     odName = 'LBLRTM-calculated ' + odName
+
+    outVar = outFP.createVariables('profile_time', 'S1')
 
     outVar = outFP.createVariable('LBLRTM_Optical_Depth', float, \
       dimOD, zlib=True, complevel=self.compressLev, \
