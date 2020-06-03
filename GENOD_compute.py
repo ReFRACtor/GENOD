@@ -423,7 +423,7 @@ class RTRefOD:
 # end RTRefOD
 
 class GENOD_netCDF:
-  def __init__(self, odDir, subset, profiles, bands):
+  def __init__(self, odDir, subset, profiles, bands, totalOD=False):
     """
     Generate a netCDF for a given a subset of molecules and a set of
     ODInt files from LBLRTM that were generated with RTRefOD. The
@@ -442,12 +442,17 @@ class GENOD_netCDF:
         profile_extraction.readProfiles()
       bands -- nBands x 2 array of starting and ending wavenumbers
         for each band used in the RTRefOD.runLBL()
+
+    Keywords
+      totalOD -- boolean, compute column-integrated optical depth 
+        at each layer (default is to just store OD for a given layer)
     """
 
     self.odDir = odDir; utils.file_check(odDir)
     self.subStr = subset
     self.profiles = profiles
     self.bands = bands
+    self.totalOD = totalOD
 
     # dimensions for netCDF file
     profShape = self.profiles['level_P'].shape
@@ -466,7 +471,7 @@ class GENOD_netCDF:
     subDirs = self.profiles['time']
 
     self.odFiles = {}
-    for iSub, subDir in enumerate(subDir):
+    for iSub, subDir in enumerate(subDirs):
       search = 'ODint_*_*_{}'.format(self.subStr)
       search = os.path.join(self.odDir, subDirs[0], search)
       self.odFiles[subDir] = sorted(glob.glob(search))
@@ -494,33 +499,52 @@ class GENOD_netCDF:
     # Git submodule
     import lblTools
 
+    # spectral points will be the same for all profiles and layers
+    wnAll = []
+
     # array will be constructed by appending arrays onto lists for
     # a given dimension, then converting to an array
     # not particularly efficient
     profDim = []
-    for prof in self.odFiles.keys():
+    for iProf, prof in enumerate(self.odFiles.keys()):
       odFiles = self.odFiles[prof]
       layDim = []
 
-      for iLay in range(1, self.nLay+1):
+      # LBL returns computations from the surface to TOA, but 
+      # we will calculate total OD from TOA to surface, so we 
+      # have to work backwards
+      for iLay in range(self.nLay, 0, -1):
         bandDim = []
+        sLay = str(iLay)
 
-        for wn1, wn2 in self.bandArr:
-          for odFile in odFiles:
-            base = os.path.basename(odFile)
-            if not (iLay in base and wn1 in base and wn2 in base):
-              continue
+        for wn1, wn2 in self.bands:
+          swn1, swn2 = str(wn1), str(wn2)
 
-            # TODO: save the WN, too!
-            wn, od = lblTools.readOD(odFile, double=True)
-            bandDim.append(od)
-          # end odFile loop
+          odFile = 'ODint_{0:03d}_{1:05.0f}-{2:05.0f}_{3:s}'.format(
+            iLay, wn1, wn2, self.subStr)
+          odPath = os.path.join(self.odDir, prof, odFile)
+
+          wn, od = lblTools.readOD(odPath, double=True)
+          bandDim.extend(list(od))
+          if iProf == 0 and iLay == 1: wnAll.extend(list(wn))
+          tempStr = 'Storing ODs for {} '.format(self.subStr)
+          tempStr += 'Profile {:d}, '.format(iProf+1)
+          tempStr += 'Layer {:d}, '.format(iLay)
+          tempStr += '{:.0f}-{:.0f} cm-1'.format(wn1, wn2)
+          print(tempStr)
+          #print(iProf, iLay, wn1, wn2, od.shape, len(bandDim), len(wnAll))
         # end band loop
+
         layDim.append(bandDim)
       # end layer loop
       profDim.append(layDim)
     # end profile loop
+
     self.allOD = np.array(profDim)
+    self.allWN = np.array(wnAll)
+
+    # integrate OD along column if we're using all molecules
+    if self.totalOD: self.allOD = self.allOD.cumsum(axis=1)
   # end arrOD()
 
   def writeNC(self):

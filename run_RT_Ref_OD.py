@@ -100,7 +100,8 @@ while wn <= regEndWN:
 
 # we'll do a separate object per subset per band per profile
 # TODO: flexibility with the subsets (also list available subsets)
-for set in [27, 2, 6, 22, 26]:
+#for set in [27, 2, 6, 22, 26]:
+for set in [27]:
   for iProf in range(nProf):
     profile = singleProfile(profiles, iProf)
     for wn1, wn2 in zip(startWN, endWN):
@@ -127,8 +128,10 @@ for set in [27, 2, 6, 22, 26]:
     # end band loop
   # end profile loop
 
+  totOD = True if set == odObj.nProfMol else False
   bandArr = np.array((startWN, endWN)).T
-  gncObj = GNC('LBL_OD_dir', odObj.subStr, profiles, bandArr)
+  gncObj = GNC('LBL_OD_dir', odObj.subStr, profiles, bandArr, \
+    totalOD=totOD)
   gncObj.getFilesOD()
   gncObj.arrOD()
 # end subset loop
