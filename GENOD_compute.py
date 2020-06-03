@@ -585,11 +585,6 @@ class GENOD_netCDF:
     ncFile = os.path.join(self.ncDir, ncFile)
     print('Building {}'.format(ncFile))
 
-    npzDat = np.load('temp.npz')
-    self.allOD = npzDat['od']
-    self.allWN = npzDat['wn']
-    self.nWN = self.allWN.size
-
     # switch around the dimensions of the OD array for easier viewing
     # in hdfview in mind
     ncOD = np.transpose(self.allOD, axes=(2,1,0))
