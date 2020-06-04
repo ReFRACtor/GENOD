@@ -306,8 +306,12 @@ class RTRefOD:
         if nameHT not in self.profile['molecules'] or \
            nameHT in self.molXS: continue
 
-        if iHT == 6 and self.subStr == 'all_molecules':
-          lblAll[iHT] = self.profileO2[iLev]
+        if iHT == 6:
+          if self.subStr == 'all_molecules':
+            lblAll[iHT] = self.profileO2[iLev]
+          else:
+            lblAll[iHT] = 0
+          # endif subStr
         else:
           lblAll[iHT] = self.profile['VMR'][self.iMol[nameHT], iLev]
         # endif O2
@@ -607,12 +611,14 @@ class GENOD_netCDF:
       outFP.createDimension(name, val)
 
     # hack job for time string ID
-    timeArr = atm['time']
-    ncObj.createDimension('string', timeArr.shape[1])
-    timeDim = ('prof', 'string')
-    outVar = ncObj.createVariable('profile_time', \
+    """
+    timeArr = self.profiles['time']
+    outFP.createDimension('string', len(nc.stringtochar(timeArr[0])))
+    timeDim = ('profiles', 'string')
+    outVar = outFP.createVariable('profile_time', \
       timeArr.dtype.str, timeDim, zlib=True)
-    outVar[:] = nc.stringtochar(atm['time'])
+    outVar[:] = nc.stringtochar(timeArr)
+    """
 
     # use chunking for the OD array (stolen from ABSCO code)
     inDims = ncOD.shape
@@ -641,8 +647,6 @@ class GENOD_netCDF:
       odName = 'Layer OD'
     # endif subStr
     odName = 'LBLRTM-calculated ' + odName
-
-    outVar = outFP.createVariables('profile_time', 'S1')
 
     outVar = outFP.createVariable('LBLRTM_Optical_Depth', float, \
       dimOD, zlib=True, complevel=self.compressLev, \
