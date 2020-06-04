@@ -587,6 +587,8 @@ class GENOD_netCDF:
 
     import netCDF4 as nc
 
+    timeArr = self.profiles['time']
+
     ncFile = 'LBLRTM_OD_{}.nc'.format(self.subStr)
     ncFile = os.path.join(self.ncDir, ncFile)
     print('Building {}'.format(ncFile))
@@ -603,22 +605,21 @@ class GENOD_netCDF:
 
     outFP.source = 'Profile: JPL; Optical Depths: AER'
 
-    dimNames = ['wavenumber', 'layers', 'profiles', 'levels']
-    dimVals = [self.nWN, self.nLay, self.nProf, self.nLay+1]
-    dimOD = ('wavenumber', 'layers', 'profiles')
+    dimNames = ['wavenumber', 'layers', 'profiles', 'levels', \
+      'string']
+    dimVals = [self.nWN, self.nLay, self.nProf, self.nLay+1, \
+      len(nc.stringtochar(timeArr[0]))]
 
     for name, val in zip(dimNames, dimVals):
       outFP.createDimension(name, val)
 
+    dimOD = ('wavenumber', 'layers', 'profiles')
+    dimTime = ('profiles', 'string')
+
     # hack job for time string ID
-    """
-    timeArr = self.profiles['time']
-    outFP.createDimension('string', len(nc.stringtochar(timeArr[0])))
-    timeDim = ('profiles', 'string')
     outVar = outFP.createVariable('profile_time', \
-      timeArr.dtype.str, timeDim, zlib=True)
+      timeArr.dtype.str, dimTime, zlib=True)
     outVar[:] = nc.stringtochar(timeArr)
-    """
 
     # use chunking for the OD array (stolen from ABSCO code)
     inDims = ncOD.shape
