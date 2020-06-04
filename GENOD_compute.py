@@ -63,7 +63,7 @@ class RTRefOD:
     # HDO is not active in the 25000-38000 cm-1 range
     # we are working on adding HCHO as a XS in the database
     # cannot find CHOHO (is it CHOCHO?)
-    self.ignored = ['HDO', 'HCHO', 'CHOHO']
+    self.ignored = ['HDO', 'CHOHO']
 
     # these guys are HITRAN molecules AND cross section species,
     # depending on the region. for the UV, they are only XS
