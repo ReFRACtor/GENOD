@@ -243,9 +243,9 @@ class RTRefOD:
       'TS=0 AM=1 MG=1 LA=0 OD=1 XS=1'
     record12 += '{:>20s}'.format('1')
     if self.subStr == 'all_molecules':
-      record12.replace('CN=0', 'CN=1')
+      record12 = record12.replace('CN=0', 'CN=1')
     elif self.subStr == 'O3':
-      record12.replace('CN=0', 'CN=6')
+      record12 = record12.replace('CN=0', 'CN=6')
 
       # with ICNTNM=6, we need scale factors, i.e., Record 1.2a
       # this was the easiest way to do it in the current framework
