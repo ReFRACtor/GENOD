@@ -244,6 +244,17 @@ class RTRefOD:
     record12 += '{:>20s}'.format('1')
     if self.subStr == 'all_molecules':
       record12.replace('CN=0', 'CN=1')
+    elif self.subStr == 'O3':
+      record12.replace('CN=0', 'CN=6')
+
+      # with ICNTNM=6, we need scale factors, i.e., Record 1.2a
+      # this was the easiest way to do it in the current framework
+      record12 += '\n'
+      record12a = ''
+      scalars = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+      for scalar in scalars: record12a += '{0:5.2f}'.format(scalar)
+      record12 += record12a
+    # endif continuum
 
     # record 1.3 is kinda long...first, band limits
     record13 = '{0:10.3e}{1:10.3e}'.format(self.wn1, self.wn2)

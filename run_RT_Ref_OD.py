@@ -107,8 +107,8 @@ while wn <= regEndWN:
 
 # we'll do a separate object per subset per band per profile
 # TODO: flexibility with the subsets (also list available subsets)
-for set in [27, 2, 6, 22, 24, 26]:
-#for set in [24]:
+#for set in [27, 2, 6, 22, 24, 26]:
+for set in [2]:
   for iProf in range(nProf):
     profile = singleProfile(profiles, iProf)
     for wn1, wn2 in zip(startWN, endWN):
