@@ -54,6 +54,9 @@ parser.add_argument('--molecules', '-m', type=int, nargs='*', \
 parser.add_argument('--mol_list', '-ml', action='store_true', \
   help='List all available molecules and their indices to be ' + \
   'used with --molecules argument, then exit. Zero-offset.')
+parser.add_argument('--profiles', '-p', type=int, nargs='*', \
+  default=[0,1,2,3], \
+  help='Zero-offset indices of profiles to model.')
 args = parser.parse_args()
 
 ncFile = args.nc_file; utils.file_check(ncFile)
@@ -77,7 +80,7 @@ if args.mol_list:
 # are submodule paths automated in the clone; we want to build models
 buildDict = {'compiler': args.compiler, 'ini': None, \
   'lnfl_path': 'LNFL', 'lblrtm_path': 'LBLRTM', \
-  'lines_path': 'AER_Line_File', 'record_id': args.zenodo, \
+  'lines_path': 'AER_Line_File', 'record_id': args.zenodo_record_id, \
   'no_build': False, 'top_dir': args.top_dir}
 
 onlyRT = args.only_lbl
@@ -137,7 +140,9 @@ while wn <= regEndWN:
 # we'll do a separate object per subset per band per profile
 for subset in args.molecules:
   for iProf in range(nProf):
+    if iProf not in args.profiles: continue
     profile = singleProfile(profiles, iProf)
+
     for wn1, wn2 in zip(startWN, endWN):
       # full subset of molecules and XS, then subset/single molecule
       # these indices "keep" the molecule corresponding to the index

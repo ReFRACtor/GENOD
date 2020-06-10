@@ -387,8 +387,9 @@ class RTRefOD:
     brdFiles = glob.glob(\
       os.path.join(self.pathLines, 'extra_brd_params') + '/*')
     for brdFile in brdFiles:
+      alias = os.path.basename(brdFile)
       if os.path.islink(alias): os.unlink(alias)
-      os.symlink(brdFile, os.path.basename(brdFile))
+      os.symlink(brdFile, alias)
     # end broadening file loop
 
     print('Running LNFL')
