@@ -23,6 +23,10 @@ parser.add_argument('--profile_number', '-p', type=int, default=0, \
   help='Number of profile for which to plot spectra. Profile ' + \
   'numbers corresond to profiles provided in input to ' + \
   'GENOD_compute.RTRefOD class.')
+parser.add_argument('--sum', '-s', action='store_true', \
+  help='Add on a figure (last page of PDF) that sums the ' + \
+  'optical depths over all layers (this should not be done ' + \
+  'for the "all_molecules" set).')
 parser.add_argument('--outfile', '-o', type=str, default='OD.pdf', \
   help='Name of PDF that will contain figures.')
 args = parser.parse_args()
@@ -51,6 +55,17 @@ for iLay, layerOD in enumerate(od):
   pdf.savefig()
   plot.close()
 # end odFile loop
+
+if args.sum:
+  print('All Layers')
+
+  plot.plot(wn, od.sum(axis=0))
+  plot.xlabel('Wavenumber')
+  plot.ylabel(r'$\tau_{Total}$')
+  plot.title('{}, All Layers'.format(os.path.basename(ncFile)))
+  pdf.savefig()
+  plot.close()
+# endif sum
 
 pdf.close()
 
