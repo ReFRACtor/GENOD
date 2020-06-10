@@ -11,9 +11,10 @@ git clone --recursive git@github.com:pernak18/GENOD.git
 Note the `--recursive` keyword. This repository is dependent on a number of other repositories and thus needs submodules also cloned. If the `--recursive` keyword is not used, the submodules can still be cloned with:
 
 ```
-git submodule init
-git submodule update
+git submodule update --init --recursive
 ```
+
+inside the clone directory.
 
 # Objective <a name='objective'></a>
 
@@ -30,7 +31,7 @@ As mentioned in [the introduction](#intro), there are a number of dependencies a
 - [LNFL](https://github.com/AER-RC/LNFL) (v3.2)
 - [LBLRTM](https://github.com/AER-RC/LBLRTM) (v12.9)
 - [common](https://github.com/AER-RC/common)
-- [AER Line File](https://zenodo.org/record/3837550)
+- [AER Line File](https://zenodo.org/record/3837550) (v3.7)
 
 The AER Line File is too large for version control in GitHub and is archived in Zenodo.
 
@@ -45,7 +46,7 @@ Necessary Python libraries are mostly standard installs, but some additional pac
 Optical depths can be computed for any combination of molecules that are allowed by LBLRTM. What molecules are used is designated in either the LNFL `TAPE5` or LBLRTM `TAPE5`. The latter was chosen for this project -- any molecules that are not used are represented by profiles with zero-valued volume mixing ratios in the `TAPE5`. Subsets are defined with the `--molecules` keyword into `run_RT_Ref_OD.py` and can be any number of molecules. The `--mol_list` keyword can be used to list all of the available molecule indices:
 
 ```
-./run_RT_Ref_OD.py -ml
+./run_RT_Ref_OD.py -n $INPATH/uv_benchmark_scenes.nc -ml # $INPATH in -n should point to parent directory of netCDF with profile information for this project
 Reading uv_benchmark_scenes.nc
 Index     Molecule  
 0         H2O       
@@ -78,16 +79,24 @@ Index     Molecule
 27        All Molecules
 Exiting after listing molecule indices
 
-./run_RT_Ref_OD.py -m 27 2 4 # all molecules, ozone, and CO experiments
+./run_RT_Ref_OD.py -n $INPATH/uv_benchmark_scenes.nc -m 27 2 4 # all molecules, ozone, and CO experiments
 ```
 
 ## Model Builds <a name='building'></a>
 
-LNFL and LBLRTM executables are built if their arguments (`lnfl_exe` and `lbl_exe`) in `run_RT_Ref_OD.py` are `None`. This is the default setting. They are built using the compiler defined with the `--compiler` keyword into `run_RT_Ref_OD.py` and `common/build_models.py`. The executables are built in their respective submodule directories -- `LNFL` and `LBLRTM`.
+LNFL and LBLRTM executables are built if their arguments (`lnfl_exe` and `lbl_exe`) in `run_RT_Ref_OD.py` are `None`. This is the default setting. They are built using the compiler defined with the `--compiler` keyword into `run_RT_Ref_OD.py` and `common/build_models.py`. The executables are built in their respective submodule directories -- `LNFL` and `LBLRTM`. The following command first builds LNFL, extracts the line file, then builds LBLRTM before proceeding to the model runs:
+
+```
+% ./run_RT_Ref_OD.py -n /rd47/scratch/RC/GENOD/uv_benchmark_scenes.nc
+```
 
 ## Line File Extraction <a name='linefile'></a>
 
-Similarly, the AER Line File is "built" with `common/build_models.py` -- the tarball is downloaded from Zenodo and extracted into the `AER_Line_File` subdirectory.
+Similarly, the AER Line File is "built" with `common/build_models.py` -- the tarball is downloaded from Zenodo and extracted into the `AER_Line_File` subdirectory. Using the model builds from the [previous step](#building) (any existing path works as well), the following command only downloads and extracts the line file before running the models:
+
+```
+./run_RT_Ref_OD.py -n $INPATH/uv_benchmark_scenes.nc -lnfl LNFL/lnfl_v3.2_linux_intel_sgl -lbl LBLRTM/lblrtm_v12.9_linux_intel_dbl
+```
 
 ## Model Runs <a name='running'></a>
 
@@ -95,9 +104,25 @@ Once the models are built, LNFL is run once to produce a `TAPE3` (see [LNFL sect
 
 LBLRTM is run for all molecule subsets, profiles, and bands (2000 cm<sup>-1</sup> chunks -- LBLRTM can only be run 2000 cm<sup>-1</sup> at a time). New `TAPE5` LBLRTM inputs are thus needed for every run. This is automated in `run_RT_Ref_OD.py`. A separate object is created for each iteration.
 
+```
+% ./run_RT_Ref_OD.py -n $INPATH/uv_benchmark_scenes.nc -lnfl LNFL/lnfl_v3.2_linux_intel_sgl -lbl LBLRTM/lblrtm_v12.9_linux_intel_dbl -lines AER_Line_File
+Reading /rd47/scratch/RC/GENOD/uv_benchmark_scenes.nc
+Extracting profile 1
+Built LBL_TAPE5_dir/2016-04-14T01:13:30.00010000Z/TAPE5_25000-26999_all_molecules
+Running LBL
+ LBLRTM EXIT
+...
+```
+
 ## Output <a name='output'></a>
 
-Every LBLRTM run produces `ODint` binary files that contain optical depth spectra for every layer in the profile when the level-0 pressure is greater than the surface pressure that is provided. In this case, that is 63 layers. All `ODint` files are uniquely named -- they contain layer number, band, and molecule -- and are stored in a subdirectory for a given profile. This directory structure is assumed in generating the netCDF file that consolidates all profiles, wavenumbers, and layers into a single file.
+Every LBLRTM run produces `ODint` binary files that contain optical depth spectra for every layer in the profile when the level-0 pressure is greater than the surface pressure that is provided. In this case, that is 63 layers. All `ODint` files are uniquely named -- they contain layer number, band, and molecule -- and are stored in a subdirectory underneath `LBL_OD_dir` for a given profile (designated by its `time_string` field). This directory structure is assumed in generating the netCDF file that consolidates all profiles, wavenumbers, and layers into a single file.
+
+Once the OD files exist, the netCDF file for with entire OD spectra over all profiles and layers is written. `run_RT_Ref_OD.py` automatically proceeds to netCDF generation after OD computation, but the radiative transfer modeling can be bypassed with the `-nc` keyword:
+
+```
+./run_RT_Ref_OD.py -n /rd47/scratch/RC/GENOD/uv_benchmark_scenes.nc -lnfl LNFL/lnfl_v3.2_linux_intel_sgl -lbl LBLRTM/lblrtm_v12.9_linux_intel_dbl -lines AER_Line_File -nc
+```
 
 # Standalone Runs <a name='standalone'></a>
 
@@ -111,7 +136,7 @@ Profile data are stored into memory from the input netCDF file via the `profile_
 
 ## LNFL <a name='lnfl'></a>
 
-Only one run of LNFL is necessary -- the "static" run. It should cover the entire spectral range or interest and all the molecules that will be used in any analysis. It will produce a `TAPE3` binary line parameter file, which is all that is needed. `GENOD_compute.py` contains a `runLNFL()` method that stages files for LNFL and runs it to produce the `TAPE3` then moves it to where it is needed for LBLRTM runs. Alternatively, the [AER-RC Docker Image](https://github.com/AER-RC/LNFL/packages/200491?version=v3.2) can be used to run LNFL with the static run:
+Only one run of LNFL is necessary -- the "static" run. It should cover the entire spectral range or interest and all the molecules that will be used in any analysis. It will produce a `TAPE3` binary line parameter file, which is all that is needed. `GENOD_compute.py` contains a `runLNFL()` method that stages files for LNFL and runs it to produce the `TAPE3` then moves it to where it is needed for LBLRTM runs. Alternatively, the [AER-RC Docker Image](https://github.com/AER-RC/LNFL/packages/200491?version=v3.2) can be used to run LNFL with the static run (the `$GENOD` environment variable in the volume mount arguments represents the directory that contains a clone of this GENOD repository):
 
 ```
 % docker pull docker.pkg.github.com/aer-rc/lnfl/lnfl:latest
