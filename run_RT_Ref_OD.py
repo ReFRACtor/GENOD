@@ -38,18 +38,47 @@ parser.add_argument('--only_netcdf', '-nc', action='store_true', \
   help='If LBLRTM has already been run and the OD files have ' + \
   'been stored to disk, this option can be used to just generate ' + \
   'the corresponding netCDF file.')
+parser.add_argument('--compiler', '-c', type=str, default='ifort', \
+  help='Name (not path!) of compiler to use when building LNFL ' + \
+  'and LBL. This string is used in a search for the full path ' + \
+  'to the executable.')
+parser.add_argument('--zenodo_record_id', '-z', type=int, \
+  default=3837550, help='Zenodo record ID for AER Line File')
+parser.add_argument('--top_dir', '-t', type=str, \
+  default=os.getcwd(), help='Top-level directory (used in build)')
+parser.add_argument('--molecules', '-m', type=int, nargs='*', \
+  default=[27, 2, 6, 22, 24, 26], \
+  help='List of zero-offset indices that correspond to molecule ' + \
+  'numbers inferred from nc_file Atmosphere.Absorber.name array. ' + \
+  'All molecule index options can be displayed with --mol_list')
+parser.add_argument('--mol_list', '-ml', action='store_true', \
+  help='List all available molecules and their indices to be ' + \
+  'used with --molecules argument, then exit. Zero-offset.')
 args = parser.parse_args()
 
 ncFile = args.nc_file; utils.file_check(ncFile)
 profiles = readProfiles(ncFile, ppmv=True)
 nProf = profiles['VMR'].shape[0]
 
+if args.mol_list:
+  # it is assumed all molecules have the same molecule names array
+  print('{0:<10s}{1:<10s}'.format('Index', 'Molecule'))
+  for iMol, mol in enumerate(profiles['molecules'][0]):
+    print('{0:<10d}{1:<10s}'.format(iMol, mol))
+  print('{0:<10d}{1:<10s}'.format(iMol+1, 'All Molecules'))
+  print('Exiting after listing molecule indices')
+  sys.exit(0)
+# end mol_list
+
 # build models if necessary; start with dictionary that is necessary
 # for BUILD objects (see common/build_models.py)
-# TODO: need more flexibility with these values
-buildDict = {'compiler': 'ifort', 'ini': None, 'lnfl_path': 'LNFL', \
-  'lblrtm_path': 'LBLRTM', 'lines_path': 'AER_Line_File', \
-  'record_id': 3837550, 'no_build': False, 'top_dir': os.getcwd()}
+# not all keys have variable values since there is no
+# configuration file to edit; "LNFL", "LBLRTM", and "AER_Line_File"
+# are submodule paths automated in the clone; we want to build models
+buildDict = {'compiler': args.compiler, 'ini': None, \
+  'lnfl_path': 'LNFL', 'lblrtm_path': 'LBLRTM', \
+  'lines_path': 'AER_Line_File', 'record_id': args.zenodo, \
+  'no_build': False, 'top_dir': args.top_dir}
 
 onlyRT = args.only_lbl
 onlyNC = args.only_netcdf
@@ -106,24 +135,22 @@ while wn <= regEndWN:
 # end while
 
 # we'll do a separate object per subset per band per profile
-# TODO: flexibility with the subsets (also list available subsets)
-#for set in [27, 2, 6, 22, 24, 26]:
-for set in [2]:
+for subset in args.molecules:
   for iProf in range(nProf):
     profile = singleProfile(profiles, iProf)
     for wn1, wn2 in zip(startWN, endWN):
-      # full set of molecules and XS, then subset/single molecule
+      # full subset of molecules and XS, then subset/single molecule
       # these indices "keep" the molecule corresponding to the index
       # and is used with profile['VMR']
-      odObj = calcOD(ncFile, wn1, wn2, set, profile, rtAll)
+      odObj = calcOD(ncFile, wn1, wn2, subset, profile, rtAll)
       if onlyNC: continue
 
-      # set up for the model runs (create inputs)
+      # subset up for the model runs (create inputs)
       odObj.molIdx()
       odObj.xsIdx()
       odObj.profO2(iProf)
 
-      if set != odObj.nProfMol: odObj.profSubset()
+      if subset != odObj.nProfMol: odObj.profSubset()
 
       odObj.lblT5()
 
@@ -135,7 +162,7 @@ for set in [2]:
     # end band loop
   # end profile loop
 
-  totOD = True if set == odObj.nProfMol else False
+  totOD = True if subset == odObj.nProfMol else False
   bandArr = np.array((startWN, endWN)).T
   gncObj = GNC('LBL_OD_dir', odObj.subStr, profiles, bandArr, \
     totalOD=totOD)
