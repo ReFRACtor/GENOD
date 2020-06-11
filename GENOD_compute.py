@@ -481,12 +481,15 @@ class GENOD_netCDF:
     if not os.path.exists(self.ncDir): os.makedirs(self.ncDir)
   # end constructor
 
-  def getProfP(self):
+  def getProfP(self, iProfs=range(4)):
     """
     Not all of the pressures provided in the user profiles may have
     been necessarily used in the OD calculation, and we need to
     reverse the profiles, so this method extracts the profiles used
     and reverses the direction to TOA-to-Surface
+
+    Keywords
+      iProfs -- int list, indices of profiles to process
     """
 
     # local module
@@ -494,6 +497,7 @@ class GENOD_netCDF:
 
     newP = []
     for iProf, profile in enumerate(self.profiles['level_P']):
+      if iProf not in iProfs: continue
       profP = singleProfile(self.profiles, iProf)['level_P']
       newP.append(profP[::-1])
     # end profile loop
@@ -535,10 +539,13 @@ class GENOD_netCDF:
     # endif nFileOD
   # end getFilesOD()
 
-  def arrOD(self):
+  def arrOD(self, iProfs=range(4)):
     """
     Read LBLRTM optical depth files and populate them intoan
     (nLay x nWN x nProf) array of ODs
+
+    Keywords
+      iProfs -- int list, indices of profiles to process
     """
 
     # Git submodule
@@ -551,7 +558,7 @@ class GENOD_netCDF:
     # a given dimension, then converting to an array
     # not particularly efficient
     profDim = []
-    for iProf, prof in enumerate(self.profiles['time']):
+    for iProf, prof in enumerate(self.profiles['time'][iProfs]):
       layDim = []
 
       # LBL returns computations from the surface to TOA, but
@@ -592,14 +599,14 @@ class GENOD_netCDF:
     if self.totalOD: self.allOD = self.allOD.cumsum(axis=1)
   # end arrOD()
 
-  def writeNC(self):
+  def writeNC(self, iProfs=range(4)):
     """
     Write the OD netCDF
     """
 
     import netCDF4 as nc
 
-    timeArr = self.profiles['time']
+    timeArr = self.profiles['time'][iProfs]
 
     ncFile = 'LBLRTM_OD_{}.nc'.format(self.subStr)
     ncFile = os.path.join(self.ncDir, ncFile)

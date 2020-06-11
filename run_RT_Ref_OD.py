@@ -171,7 +171,7 @@ for subset in args.molecules:
   bandArr = np.array((startWN, endWN)).T
   gncObj = GNC('LBL_OD_dir', odObj.subStr, profiles, bandArr, \
     totalOD=totOD)
-  gncObj.getProfP()
-  gncObj.arrOD()
-  gncObj.writeNC()
+  gncObj.getProfP(iProfs=args.profiles)
+  gncObj.arrOD(iProfs=args.profiles)
+  gncObj.writeNC(iProfs=args.profiles)
 # end subset loop
