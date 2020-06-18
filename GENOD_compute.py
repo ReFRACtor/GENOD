@@ -277,7 +277,7 @@ class RTRefOD:
 
     # record 3.2: observer pressure limits, nadir SZA
     record32 = '{0:10.3f}{1:10.3f}{2:10.3f}'.format(
-      pLevs.max(), pLevs.min(), zenith)
+      self.profile['surface_P'], pLevs.min()-0.01, zenith)
 
     # record 3.3b -- list of pressures boundaries for calculations
     record33b = recordBlock(pLevs,format='{:10.3f}')[:-1]

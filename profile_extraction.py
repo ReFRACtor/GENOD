@@ -86,6 +86,7 @@ def singleProfile(inDict, iProf, aboveSurface=True, offsetP=0.1):
       return singleAtm
     elif iPosAlt.size == nLev-1:
       levP[levP.argmax()] = singleAtm['surface_P']-0.1
+      iPosAlt = np.arange(nLev)
     else:
       levP = singleAtm['level_P'][iPosAlt]
     # endif 0
