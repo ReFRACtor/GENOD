@@ -51,7 +51,7 @@ def readProfiles(inFile, ppmv=False):
   return atmDict
 # end readProfiles()
 
-def singleProfile(inDict, iProf, aboveSurface=True):
+def singleProfile(inDict, iProf, aboveSurface=True, offsetP=0.1):
   """
   Using the output from readProfiles() as a starting point, extract
   a single profile from the collection of profiles provided
@@ -63,12 +63,18 @@ def singleProfile(inDict, iProf, aboveSurface=True):
   Keywords
     aboveSurface -- boolean; only keep levels where pressure exceeds
       the given surface pressure
+    offsetP -- float, "perturbation" to surface pressure so that
+      pressure levels are between the surface and TOA (so P_O is
+      P_surface-offsetP)
   """
 
   print('Extracting profile {}'.format(iProf+1))
 
   singleAtm = {}
   for field in inDict: singleAtm[field] = inDict[field][iProf]
+
+  levP = singleAtm['level_P']
+  nLev = levP.size
 
   if aboveSurface:
     iPosAlt = np.where(
@@ -78,9 +84,13 @@ def singleProfile(inDict, iProf, aboveSurface=True):
 
       # need to do something else here
       return singleAtm
+    elif iPosAlt.size == nLev-1:
+      levP[levP.argmax()] = singleAtm['surface_P']-0.1
+    else:
+      levP = singleAtm['level_P'][iPosAlt]
     # endif 0
 
-    singleAtm['level_P'] = singleAtm['level_P'][iPosAlt]
+    singleAtm['level_P'] = np.array(levP)
     singleAtm['level_T'] = singleAtm['level_T'][iPosAlt]
     singleAtm['VMR'] = singleAtm['VMR'][:,iPosAlt]
   # end surface
