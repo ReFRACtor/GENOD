@@ -279,8 +279,14 @@ class RTRefOD:
     record32 = '{0:10.3f}{1:10.3f}{2:10.3f}'.format(
       self.profile['surface_P'], pLevs.min()-0.01, zenith)
 
+    # calculational levels, as opposed to observed/input levels
+    # calc levels need to be within input levels (inclusive)
+    # but rounding from 10.3f to 10.3E complicates this requirement
+    calcLevs = np.array(pLevs)
+    calcLevs[0] = float('{:10.3e}'.format(pLevs[0]))
+
     # record 3.3b -- list of pressures boundaries for calculations
-    record33b = recordBlock(pLevs,format='{:10.3f}')[:-1]
+    record33b = recordBlock(calcLevs,format='{:10.3f}')[:-1]
 
     # record 3.4: user profile header for given molecule
     record34 = '{0:5d}{1:24s}'.format(-self.nLev, ' User profile')
