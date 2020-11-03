@@ -229,7 +229,7 @@ class RTRefOD:
     self.outT5 = os.path.join(self.outDirT5, outT5)
 
     pLevs = self.profile['level_P']
-    zenith = 90-self.profile['obs_zenith']
+    zenith = self.profile['obs_zenith']
 
     # record 1.1: simple description of calculation
     record11 = '$ OD computation for {}'.format(self.outT5)
